@@ -33,9 +33,7 @@ import {
 } from '@mui/icons-material'
 import axios from 'axios'
 
-const API_BASE_URL = window.location.hostname === 'localhost' 
-  ? 'http://localhost:8000/api' 
-  : `http://${window.location.hostname}:8000/api`
+const API_BASE_URL = 'http://10.0.0.111:8000/api'
 
 function App() {
   const [transcriptions, setTranscriptions] = useState([])

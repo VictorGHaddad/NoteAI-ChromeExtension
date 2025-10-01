@@ -1,12 +1,13 @@
 {
   "manifest_version": 3,
   "name": "Audio Transcriber",
-  "version": "1.2.0",
+  "version": "2.0.0",
   "description": "Extensão para gravar áudio e transcrever usando IA",
   "permissions": [
     "activeTab",
     "storage",
-    "tabCapture"
+    "tabCapture",
+    "offscreen"
   ],
   "host_permissions": [
     "http://localhost:8000/*",

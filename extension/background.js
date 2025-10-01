@@ -4,12 +4,11 @@ console.log('Audio Transcriber background script loaded');
 // Global state for background recording
 let recordingState = {
     isRecording: false,
-    mediaRecorder: null,
-    recordedChunks: [],
     startTime: null,
-    tabId: null,
-    stream: null
+    tabId: null
 };
+
+let offscreenDocumentCreated = false;
 
 // Extension installation handler
 chrome.runtime.onInstalled.addListener((details) => {
@@ -23,43 +22,56 @@ chrome.runtime.onInstalled.addListener((details) => {
     }
 });
 
+// Create offscreen document if needed
+async function setupOffscreenDocument() {
+    if (offscreenDocumentCreated) {
+        return;
+    }
+    
+    try {
+        // Check if offscreen document already exists
+        const existingContexts = await chrome.runtime.getContexts({
+            contextTypes: ['OFFSCREEN_DOCUMENT']
+        });
+        
+        if (existingContexts.length > 0) {
+            console.log('Offscreen document already exists');
+            offscreenDocumentCreated = true;
+            return;
+        }
+        
+        // Create offscreen document
+        await chrome.offscreen.createDocument({
+            url: 'offscreen.html',
+            reasons: ['USER_MEDIA'],
+            justification: 'Recording audio from tab for transcription'
+        });
+        
+        offscreenDocumentCreated = true;
+        console.log('Offscreen document created');
+        
+    } catch (error) {
+        console.error('Error setting up offscreen document:', error);
+        throw error;
+    }
+}
+
 // Message handler for recording control
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     console.log('Background received message:', request.action || 'no action');
     
     if (request.action === 'startBackgroundRecording') {
-        // Get stream ID and return it to popup
-        chrome.tabCapture.getMediaStreamId({ 
-            targetTabId: request.tabId 
-        }, (streamId) => {
-            if (chrome.runtime.lastError) {
-                console.error('tabCapture error:', chrome.runtime.lastError);
-                sendResponse({ success: false, error: chrome.runtime.lastError.message });
-            } else if (!streamId) {
-                sendResponse({ success: false, error: 'Failed to get stream ID - tab may not support audio capture' });
-            } else {
-                console.log('Got stream ID:', streamId);
-                sendResponse({ success: true, streamId: streamId });
-            }
-        });
-        return true; // Keep channel open for async response
-    }
-    
-    if (request.action === 'stopBackgroundRecording') {
-        stopBackgroundRecording()
+        handleStartRecording(request.tabId)
             .then(result => sendResponse({ success: true, ...result }))
             .catch(error => sendResponse({ success: false, error: error.message }));
         return true;
     }
     
-    if (request.action === 'saveRecordingChunk') {
-        // Store chunks sent from popup
-        if (!recordingState.recordedChunks) {
-            recordingState.recordedChunks = [];
-        }
-        recordingState.recordedChunks.push(request.chunk);
-        sendResponse({ success: true });
-        return false;
+    if (request.action === 'stopBackgroundRecording') {
+        handleStopRecording()
+            .then(result => sendResponse({ success: true, ...result }))
+            .catch(error => sendResponse({ success: false, error: error.message }));
+        return true;
     }
     
     if (request.action === 'getRecordingState') {
@@ -76,7 +88,62 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     return false;
 });
 
-async function stopBackgroundRecording() {
+async function handleStartRecording(tabId) {
+    try {
+        console.log('Starting background recording for tab:', tabId);
+        
+        // Setup offscreen document
+        await setupOffscreenDocument();
+        
+        // Get stream ID
+        const streamId = await new Promise((resolve, reject) => {
+            chrome.tabCapture.getMediaStreamId({ 
+                targetTabId: tabId 
+            }, (streamId) => {
+                if (chrome.runtime.lastError) {
+                    reject(new Error(chrome.runtime.lastError.message));
+                } else if (!streamId) {
+                    reject(new Error('Failed to get stream ID'));
+                } else {
+                    resolve(streamId);
+                }
+            });
+        });
+        
+        console.log('Got stream ID:', streamId);
+        
+        // Send to offscreen document to start recording
+        const response = await chrome.runtime.sendMessage({
+            action: 'startRecording',
+            streamId: streamId
+        });
+        
+        if (!response || !response.success) {
+            throw new Error(response?.error || 'Failed to start recording in offscreen document');
+        }
+        
+        // Update state
+        recordingState.isRecording = true;
+        recordingState.startTime = Date.now();
+        recordingState.tabId = tabId;
+        
+        await chrome.storage.local.set({
+            recordingState: {
+                isRecording: true,
+                startTime: recordingState.startTime
+            }
+        });
+        
+        console.log('Recording started successfully');
+        return { message: 'Recording started in background' };
+        
+    } catch (error) {
+        console.error('Error starting recording:', error);
+        throw error;
+    }
+}
+
+async function handleStopRecording() {
     try {
         console.log('Stopping background recording');
         
@@ -84,32 +151,33 @@ async function stopBackgroundRecording() {
             throw new Error('No recording in progress');
         }
         
-        // Get the recorded chunks from storage
-        const result = await chrome.storage.local.get(['recordingChunks']);
-        const chunks = result.recordingChunks || [];
+        // Send message to offscreen to stop recording
+        const response = await chrome.runtime.sendMessage({
+            action: 'stopRecording'
+        });
         
-        console.log('Retrieved chunks:', chunks.length);
+        if (!response || !response.success) {
+            throw new Error(response?.error || 'Failed to stop recording');
+        }
         
-        // Update storage to mark as not recording
+        // Update state
+        recordingState.isRecording = false;
+        recordingState.startTime = null;
+        recordingState.tabId = null;
+        
         await chrome.storage.local.set({
             recordingState: { isRecording: false }
         });
         
-        // Reset state
-        recordingState.isRecording = false;
-        recordingState.mediaRecorder = null;
-        recordingState.recordedChunks = [];
-        recordingState.startTime = null;
-        recordingState.tabId = null;
-        recordingState.stream = null;
-        
-        return { 
+        console.log('Recording stopped successfully');
+        return {
             message: 'Recording stopped',
-            chunks: chunks.length
+            size: response.size,
+            chunks: response.chunks
         };
         
     } catch (error) {
-        console.error('Error stopping background recording:', error);
+        console.error('Error stopping recording:', error);
         throw error;
     }
 }

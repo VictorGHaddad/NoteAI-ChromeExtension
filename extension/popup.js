@@ -44,13 +44,23 @@ class AudioRecorder {
     async checkRecordingState() {
         try {
             // Check if there's a recording in progress
-            const storage = await chrome.storage.local.get(['recordingState']);
+            const response = await chrome.runtime.sendMessage({ action: 'getRecordingState' });
             
-            if (storage.recordingState && storage.recordingState.isRecording) {
-                this.updateStatus('⚠️ Há uma gravação em andamento.\n\nSe você fechou o popup durante a gravação, a gravação foi perdida.\n\nClique em "Limpar" e inicie uma nova gravação.');
-                this.showError('Gravação anterior interrompida. Inicie uma nova.');
+            if (response && response.success && response.isRecording) {
+                this.isRecording = true;
+                this.startTime = response.startTime;
+                this.updateRecordingUI();
+                this.startTimer();
+                this.updateStatus('🎙️ Gravação em andamento\n\n✅ Rodando em background\n✅ Você pode fechar este popup');
             } else {
-                this.updateStatus('🎙️ Pronto para gravar áudio da aba\n\n💡 A gravação capturará o áudio da reunião/página.\n\n⚠️ Mantenha o popup aberto durante a gravação');
+                this.updateStatus('🎙️ Pronto para gravar áudio da aba\n\n💡 A gravação capturará o áudio da reunião/página\n✅ Grava em background\n✅ Áudio continua tocando normalmente');
+            }
+            
+            // Check if there's a saved recording
+            const storage = await chrome.storage.local.get(['lastRecording']);
+            if (storage.lastRecording && !this.isRecording) {
+                this.showSuccess('Há uma gravação salva! Clique em "Carregar Gravação" para transcrever.');
+                await this.loadLastRecording();
             }
         } catch (error) {
             console.log('Error checking recording state:', error);
@@ -78,90 +88,32 @@ class AudioRecorder {
                 throw new Error('Não foi possível identificar a aba ativa');
             }
             
-            // Get stream ID from background
+            this.updateStatus('Iniciando gravação em background...');
+            
+            // Start background recording
             const response = await chrome.runtime.sendMessage({
                 action: 'startBackgroundRecording',
                 tabId: tab.id
             });
             
-            if (!response.success || !response.streamId) {
-                throw new Error(response.error || 'Falha ao obter stream ID');
+            if (!response || !response.success) {
+                throw new Error(response?.error || 'Falha ao iniciar gravação');
             }
             
-            this.updateStatus('Capturando áudio da aba...');
-            
-            // Get the media stream using the stream ID
-            const constraints = {
-                audio: {
-                    mandatory: {
-                        chromeMediaSource: 'tab',
-                        chromeMediaSourceId: response.streamId
-                    }
-                }
-            };
-            
-            this.stream = await navigator.mediaDevices.getUserMedia(constraints);
-            
-            if (!this.stream) {
-                throw new Error('Falha ao capturar stream de áudio');
-            }
-            
-            console.log('Got media stream with', this.stream.getAudioTracks().length, 'audio tracks');
-            
-            // Initialize MediaRecorder
-            const options = {
-                mimeType: 'audio/webm;codecs=opus'
-            };
-            
-            if (!MediaRecorder.isTypeSupported(options.mimeType)) {
-                options.mimeType = 'audio/webm';
-                if (!MediaRecorder.isTypeSupported(options.mimeType)) {
-                    options.mimeType = 'audio/mp4';
-                }
-            }
-            
-            this.mediaRecorder = new MediaRecorder(this.stream, options);
-            this.recordedChunks = [];
-            
-            // Set up event handlers
-            this.mediaRecorder.ondataavailable = (event) => {
-                if (event.data.size > 0) {
-                    this.recordedChunks.push(event.data);
-                    console.log('Chunk recorded, size:', event.data.size);
-                }
-            };
-            
-            this.mediaRecorder.onstop = () => {
-                console.log('MediaRecorder stopped, processing...');
-                this.processRecording();
-            };
-            
-            // Start recording
-            this.mediaRecorder.start(1000);
             this.isRecording = true;
             this.startTime = Date.now();
             
-            // Update state in storage
-            await chrome.storage.local.set({
-                recordingState: {
-                    isRecording: true,
-                    startTime: this.startTime
-                }
-            });
-            
             this.updateRecordingUI();
             this.startTimer();
-            this.updateStatus('🎙️ Gravando áudio da aba\n\n⚠️ IMPORTANTE: Mantenha este popup aberto durante a gravação\n\n💡 O áudio da reunião/página está sendo capturado');
-            this.showSuccess('Gravação iniciada!');
+            this.updateStatus('🎙️ Gravando áudio da aba\n\n✅ Rodando em background\n✅ Áudio tocando normalmente\n✅ Pode fechar o popup\n\n💡 Reabra para parar a gravação');
+            this.showSuccess('Gravação iniciada em background!');
 
         } catch (error) {
             console.error('Error starting recording:', error);
             
             let errorMessage = 'Erro ao iniciar gravação';
             
-            if (error.name === 'NotAllowedError') {
-                errorMessage = '❌ Permissão negada para capturar áudio da aba.\n\n💡 Certifique-se de permitir a captura quando solicitado.';
-            } else if (error.message.includes('stream ID')) {
+            if (error.message.includes('stream ID')) {
                 errorMessage = '❌ Não foi possível capturar áudio.\n\n💡 Certifique-se de que:\n• A aba está ativa\n• A página está reproduzindo áudio\n• Não é uma página protegida (chrome://, etc.)';
             } else {
                 errorMessage = `Erro: ${error.message}`;
@@ -172,71 +124,64 @@ class AudioRecorder {
         }
     }
 
-    processRecording() {
-        if (this.recordedChunks.length === 0) {
-            this.showError('Nenhum áudio foi gravado');
-            return;
-        }
-
-        try {
-            // Create blob from recorded chunks
-            const blob = new Blob(this.recordedChunks, { type: 'audio/webm' });
-            
-            console.log('Recording blob created, size:', blob.size, 'chunks:', this.recordedChunks.length);
-            
-            // Create audio URL for preview
-            const audioUrl = URL.createObjectURL(blob);
-            this.audioPlayer.src = audioUrl;
-            
-            // Store blob for upload
-            this.recordedBlob = blob;
-            
-            // Show preview and actions
-            this.audioPreview.classList.remove('hidden');
-            this.actions.classList.remove('hidden');
-            
-            this.updateStatus(`Gravação concluída!\nDuração: ${((Date.now() - this.startTime) / 1000).toFixed(1)}s\nTamanho: ${(blob.size / 1024).toFixed(2)} KB`);
-            this.showSuccess('Áudio gravado com sucesso! Você pode ouvir e transcrever.');
-
-        } catch (error) {
-            console.error('Error processing recording:', error);
-            this.showError(`Erro ao processar gravação: ${error.message}`);
-        }
-    }
-
     async stopRecording() {
         try {
             this.updateStatus('Parando gravação...');
             
-            // Stop MediaRecorder
-            if (this.mediaRecorder && this.mediaRecorder.state !== 'inactive') {
-                this.mediaRecorder.stop();
-            }
+            // Stop background recording
+            const response = await chrome.runtime.sendMessage({
+                action: 'stopBackgroundRecording'
+            });
             
-            // Stop stream tracks
-            if (this.stream) {
-                this.stream.getTracks().forEach(track => {
-                    console.log('Stopping track:', track.kind);
-                    track.stop();
-                });
-                this.stream = null;
+            if (!response || !response.success) {
+                throw new Error(response?.error || 'Falha ao parar gravação');
             }
             
             this.isRecording = false;
             this.stopTimer();
             this.resetRecordingUI();
             
-            // Update storage
-            await chrome.storage.local.set({
-                recordingState: { isRecording: false }
-            });
+            // Load the saved recording
+            await this.loadLastRecording();
             
-            // processRecording will be called by onstop event
+            const sizeKB = (response.size / 1024).toFixed(2);
+            this.showSuccess(`Gravação concluída! ${sizeKB} KB`);
 
         } catch (error) {
             console.error('Error stopping recording:', error);
             this.showError(`Erro ao parar gravação: ${error.message}`);
             this.resetRecordingUI();
+        }
+    }
+
+    async loadLastRecording() {
+        try {
+            const storage = await chrome.storage.local.get(['lastRecording']);
+            
+            if (!storage.lastRecording || !storage.lastRecording.audio) {
+                return;
+            }
+            
+            // Convert base64 to blob
+            const response = await fetch(storage.lastRecording.audio);
+            const blob = await response.blob();
+            
+            // Create audio URL
+            const audioUrl = URL.createObjectURL(blob);
+            this.audioPlayer.src = audioUrl;
+            
+            // Store blob
+            this.recordedBlob = blob;
+            
+            // Show preview and actions
+            this.audioPreview.classList.remove('hidden');
+            this.actions.classList.remove('hidden');
+            
+            const sizeKB = (storage.lastRecording.size / 1024).toFixed(2);
+            this.updateStatus(`Gravação pronta!\nTamanho: ${sizeKB} KB\n\nOuça a prévia e clique em "Transcrever"`);
+
+        } catch (error) {
+            console.error('Error loading recording:', error);
         }
     }
 
