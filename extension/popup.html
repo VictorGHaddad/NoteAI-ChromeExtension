@@ -1,0 +1,278 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Audio Transcriber</title>
+    <style>
+        body {
+            width: 350px;
+            min-height: 400px;
+            padding: 20px;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            margin: 0;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 20px;
+        }
+
+        .header h1 {
+            margin: 0;
+            font-size: 20px;
+            font-weight: 600;
+        }
+
+        .header p {
+            margin: 5px 0 0 0;
+            opacity: 0.8;
+            font-size: 12px;
+        }
+
+        .recording-controls {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 20px;
+            backdrop-filter: blur(10px);
+        }
+
+        .record-button {
+            width: 100%;
+            height: 50px;
+            border: none;
+            border-radius: 25px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+        }
+
+        .record-button.start {
+            background: #4CAF50;
+            color: white;
+        }
+
+        .record-button.start:hover {
+            background: #45a049;
+            transform: translateY(-2px);
+        }
+
+        .record-button.stop {
+            background: #f44336;
+            color: white;
+            animation: pulse 1.5s infinite;
+        }
+
+        .record-button.stop:hover {
+            background: #da190b;
+        }
+
+        .record-button:disabled {
+            background: #666;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        @keyframes pulse {
+            0% { box-shadow: 0 0 0 0 rgba(244, 67, 54, 0.7); }
+            70% { box-shadow: 0 0 0 10px rgba(244, 67, 54, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(244, 67, 54, 0); }
+        }
+
+        .timer {
+            text-align: center;
+            font-size: 18px;
+            font-weight: 600;
+            margin: 10px 0;
+            min-height: 24px;
+        }
+
+        .status {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 8px;
+            padding: 15px;
+            margin-bottom: 15px;
+            backdrop-filter: blur(10px);
+        }
+
+        .status h3 {
+            margin: 0 0 10px 0;
+            font-size: 14px;
+            opacity: 0.8;
+        }
+
+        .status-content {
+            font-size: 12px;
+            line-height: 1.4;
+        }
+
+        .progress-bar {
+            width: 100%;
+            height: 4px;
+            background: rgba(255, 255, 255, 0.2);
+            border-radius: 2px;
+            overflow: hidden;
+            margin: 10px 0;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: #4CAF50;
+            border-radius: 2px;
+            transition: width 0.3s ease;
+            width: 0%;
+        }
+
+        .audio-preview {
+            margin: 15px 0;
+        }
+
+        .audio-preview audio {
+            width: 100%;
+            height: 35px;
+        }
+
+        .actions {
+            display: flex;
+            gap: 10px;
+            margin-top: 15px;
+        }
+
+        .btn {
+            flex: 1;
+            padding: 10px;
+            border: none;
+            border-radius: 6px;
+            font-size: 12px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .btn-primary {
+            background: #2196F3;
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background: #1976D2;
+        }
+
+        .btn-secondary {
+            background: rgba(255, 255, 255, 0.2);
+            color: white;
+        }
+
+        .btn-secondary:hover {
+            background: rgba(255, 255, 255, 0.3);
+        }
+
+        .btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .error {
+            background: rgba(244, 67, 54, 0.2);
+            border: 1px solid rgba(244, 67, 54, 0.3);
+            color: #ffcdd2;
+            padding: 10px;
+            border-radius: 6px;
+            font-size: 12px;
+            margin: 10px 0;
+        }
+
+        .success {
+            background: rgba(76, 175, 80, 0.2);
+            border: 1px solid rgba(76, 175, 80, 0.3);
+            color: #c8e6c9;
+            padding: 10px;
+            border-radius: 6px;
+            font-size: 12px;
+            margin: 10px 0;
+        }
+
+        .hidden {
+            display: none;
+        }
+
+        .help-text {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 8px;
+            padding: 10px;
+            margin: 10px 0;
+            font-size: 11px;
+            line-height: 1.4;
+            backdrop-filter: blur(10px);
+        }
+
+        .recording-indicator {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            width: 12px;
+            height: 12px;
+            background: #f44336;
+            border-radius: 50%;
+            animation: blink 1s infinite;
+        }
+
+        @keyframes blink {
+            0%, 50% { opacity: 1; }
+            51%, 100% { opacity: 0.3; }
+        }
+    </style>
+</head>
+<body>
+    <div class="recording-indicator hidden" id="recordingIndicator"></div>
+    
+    <div class="header">
+        <h1>🎙️ Audio Transcriber</h1>
+        <p>Grave e transcreva áudio com IA</p>
+    </div>
+
+    <div class="recording-controls">
+        <button class="record-button start" id="recordBtn">
+            <span id="recordIcon">🎤</span>
+            <span id="recordText">Iniciar Gravação</span>
+        </button>
+        
+        <div class="timer" id="timer"></div>
+        
+        <div class="progress-bar hidden" id="progressBar">
+            <div class="progress-fill" id="progressFill"></div>
+        </div>
+        
+        <div class="help-text">
+            💡 <strong>Dica:</strong> Se aparecer erro de permissão, clique no ícone 🔒 na barra de endereços e permita o acesso ao microfone.
+        </div>
+    </div>
+
+    <div class="audio-preview hidden" id="audioPreview">
+        <audio controls id="audioPlayer"></audio>
+    </div>
+
+    <div class="status hidden" id="status">
+        <h3 id="statusTitle">Status</h3>
+        <div class="status-content" id="statusContent"></div>
+    </div>
+
+    <div class="actions hidden" id="actions">
+        <button class="btn btn-primary" id="uploadBtn">📤 Transcrever</button>
+        <button class="btn btn-secondary" id="clearBtn">🗑️ Limpar</button>
+    </div>
+
+    <div id="messages"></div>
+
+    <script src="config.js"></script>
+    <script src="popup.js"></script>
+</body>
+</html>

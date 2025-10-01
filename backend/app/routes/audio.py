@@ -1,0 +1,227 @@
+import os
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
+from sqlalchemy.orm import Session
+from typing import List
+import mimetypes
+
+from ..database import get_db
+from ..models import Transcription
+from ..services.transcriber import TranscriberService
+from ..services.summarizer import SummarizerService
+
+router = APIRouter(prefix="/audio", tags=["audio"])
+
+# Initialize services (will be initialized on first use)
+transcriber_service = None
+summarizer_service = None
+
+def get_transcriber_service():
+    global transcriber_service
+    if transcriber_service is None:
+        transcriber_service = TranscriberService()
+    return transcriber_service
+
+def get_summarizer_service():
+    global summarizer_service
+    if summarizer_service is None:
+        summarizer_service = SummarizerService()
+    return summarizer_service
+
+# Supported audio formats
+SUPPORTED_FORMATS = {'.mp3', '.wav', '.m4a', '.ogg', '.webm', '.mp4', '.mpeg', '.mpga'}
+MAX_FILE_SIZE = int(os.getenv("MAX_AUDIO_SIZE_MB", "25")) * 1024 * 1024  # Convert MB to bytes
+
+@router.post("/upload")
+async def upload_audio(
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db)
+):
+    """
+    Upload audio file, transcribe it, and generate summary
+    """
+    try:
+        # Validate file
+        if not file.filename:
+            raise HTTPException(status_code=400, detail="Nome do arquivo é obrigatório")
+        
+        # Check file extension
+        file_ext = os.path.splitext(file.filename.lower())[1]
+        if file_ext not in SUPPORTED_FORMATS:
+            raise HTTPException(
+                status_code=400, 
+                detail=f"Formato não suportado. Formatos aceitos: {', '.join(SUPPORTED_FORMATS)}"
+            )
+        
+        # Check file size
+        file_content = await file.read()
+        if len(file_content) > MAX_FILE_SIZE:
+            raise HTTPException(
+                status_code=400, 
+                detail=f"Arquivo muito grande. Tamanho máximo: {MAX_FILE_SIZE // (1024*1024)}MB"
+            )
+        
+        # Reset file pointer
+        await file.seek(0)
+        
+        # Transcribe audio
+        transcriber = get_transcriber_service()
+        transcription_result = await transcriber.transcribe_audio(file, file.filename)
+        
+        # Generate summary
+        summarizer = get_summarizer_service()
+        summary = await summarizer.generate_summary(transcription_result["text"])
+        
+        # Save to database
+        db_transcription = Transcription(
+            filename=file.filename,
+            original_text=transcription_result["text"],
+            summary=summary,
+            duration=transcription_result.get("duration"),
+            file_size=len(file_content),
+            language=transcription_result.get("language")
+        )
+        
+        db.add(db_transcription)
+        db.commit()
+        db.refresh(db_transcription)
+        
+        return {
+            "id": db_transcription.id,
+            "filename": db_transcription.filename,
+            "text": db_transcription.original_text,
+            "summary": db_transcription.summary,
+            "duration": db_transcription.duration,
+            "language": db_transcription.language,
+            "created_at": db_transcription.created_at
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Erro interno do servidor: {str(e)}")
+
+@router.get("/transcriptions")
+async def get_transcriptions(
+    skip: int = 0,
+    limit: int = 100,
+    db: Session = Depends(get_db)
+):
+    """
+    Get list of all transcriptions
+    """
+    try:
+        transcriptions = db.query(Transcription).offset(skip).limit(limit).all()
+        
+        return {
+            "transcriptions": [
+                {
+                    "id": t.id,
+                    "filename": t.filename,
+                    "text": t.original_text,
+                    "summary": t.summary,
+                    "duration": t.duration,
+                    "language": t.language,
+                    "file_size": t.file_size,
+                    "created_at": t.created_at,
+                    "updated_at": t.updated_at
+                }
+                for t in transcriptions
+            ],
+            "total": len(transcriptions)
+        }
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Erro ao buscar transcrições: {str(e)}")
+
+@router.get("/transcriptions/{transcription_id}")
+async def get_transcription(
+    transcription_id: int,
+    db: Session = Depends(get_db)
+):
+    """
+    Get specific transcription by ID
+    """
+    try:
+        transcription = db.query(Transcription).filter(Transcription.id == transcription_id).first()
+        
+        if not transcription:
+            raise HTTPException(status_code=404, detail="Transcrição não encontrada")
+        
+        return {
+            "id": transcription.id,
+            "filename": transcription.filename,
+            "text": transcription.original_text,
+            "summary": transcription.summary,
+            "duration": transcription.duration,
+            "language": transcription.language,
+            "file_size": transcription.file_size,
+            "created_at": transcription.created_at,
+            "updated_at": transcription.updated_at
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Erro ao buscar transcrição: {str(e)}")
+
+@router.delete("/transcriptions/{transcription_id}")
+async def delete_transcription(
+    transcription_id: int,
+    db: Session = Depends(get_db)
+):
+    """
+    Delete transcription by ID
+    """
+    try:
+        transcription = db.query(Transcription).filter(Transcription.id == transcription_id).first()
+        
+        if not transcription:
+            raise HTTPException(status_code=404, detail="Transcrição não encontrada")
+        
+        db.delete(transcription)
+        db.commit()
+        
+        return {"message": "Transcrição deletada com sucesso"}
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Erro ao deletar transcrição: {str(e)}")
+
+@router.post("/transcriptions/{transcription_id}/regenerate-summary")
+async def regenerate_summary(
+    transcription_id: int,
+    db: Session = Depends(get_db)
+):
+    """
+    Regenerate summary for existing transcription
+    """
+    try:
+        transcription = db.query(Transcription).filter(Transcription.id == transcription_id).first()
+        
+        if not transcription:
+            raise HTTPException(status_code=404, detail="Transcrição não encontrada")
+        
+        # Generate new summary
+        summarizer = get_summarizer_service()
+        new_summary = await summarizer.generate_summary(transcription.original_text)
+        
+        # Update database
+        transcription.summary = new_summary
+        db.commit()
+        db.refresh(transcription)
+        
+        return {
+            "id": transcription.id,
+            "filename": transcription.filename,
+            "text": transcription.original_text,
+            "summary": transcription.summary,
+            "duration": transcription.duration,
+            "language": transcription.language,
+            "updated_at": transcription.updated_at
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Erro ao regenerar resumo: {str(e)}")

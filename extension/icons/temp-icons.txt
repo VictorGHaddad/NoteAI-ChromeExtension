@@ -1,0 +1,3 @@
+# Ícones Temporários
+Vou criar ícones simples usando emoji para a extensão funcionar.
+Para uma versão final, você pode criar ícones PNG personalizados.
