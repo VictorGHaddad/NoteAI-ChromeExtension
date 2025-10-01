@@ -6,7 +6,7 @@ class AudioRecorder {
         this.stream = null;
         this.startTime = null;
         this.timerInterval = null;
-        this.recordedBlob = null;
+        this.useBackgroundRecording = true; // Use background recording by default
         
         this.API_BASE_URL = CONFIG.API_BASE_URL;
         
@@ -32,7 +32,6 @@ class AudioRecorder {
         this.recordingIndicator = document.getElementById('recordingIndicator');
         this.progressBar = document.getElementById('progressBar');
         this.progressFill = document.getElementById('progressFill');
-        this.loadLastBtn = document.getElementById('loadLastBtn');
     }
 
     attachEventListeners() {
@@ -44,17 +43,26 @@ class AudioRecorder {
     async checkRecordingState() {
         try {
             // Check if there's a recording in progress
-            const storage = await chrome.storage.local.get(['recordingState']);
+            const response = await chrome.runtime.sendMessage({ action: 'getRecordingState' });
             
-            if (storage.recordingState && storage.recordingState.isRecording) {
-                this.updateStatus('⚠️ Há uma gravação em andamento.\n\nSe você fechou o popup durante a gravação, a gravação foi perdida.\n\nClique em "Limpar" e inicie uma nova gravação.');
-                this.showError('Gravação anterior interrompida. Inicie uma nova.');
+            if (response.success && response.isRecording) {
+                this.isRecording = true;
+                this.startTime = response.startTime;
+                this.updateRecordingUI();
+                this.startTimer();
+                this.updateStatus('Gravação em andamento (em background)');
             } else {
-                this.updateStatus('🎙️ Pronto para gravar áudio da aba\n\n💡 A gravação capturará o áudio da reunião/página.\n\n⚠️ Mantenha o popup aberto durante a gravação');
+                this.updateStatus('�️ Pronto para gravar áudio da aba');
+            }
+            
+            // Check if there's a saved recording
+            const storage = await chrome.storage.local.get(['lastRecording']);
+            if (storage.lastRecording && !this.isRecording) {
+                this.showSuccess('Há uma gravação salva. Clique em "Carregar Última Gravação"');
             }
         } catch (error) {
             console.log('Error checking recording state:', error);
-            this.updateStatus('🎙️ Pronto para gravar áudio da aba');
+            this.updateStatus('�️ Pronto para gravar áudio da aba');
         }
     }
 
@@ -69,106 +77,139 @@ class AudioRecorder {
     async startRecording() {
         try {
             this.clearMessages();
-            this.updateStatus('Preparando gravação...');
             
-            // Get current tab
-            const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-            
-            if (!tab || !tab.id) {
-                throw new Error('Não foi possível identificar a aba ativa');
-            }
-            
-            // Get stream ID from background
-            const response = await chrome.runtime.sendMessage({
-                action: 'startBackgroundRecording',
-                tabId: tab.id
-            });
-            
-            if (!response.success || !response.streamId) {
-                throw new Error(response.error || 'Falha ao obter stream ID');
-            }
-            
-            this.updateStatus('Capturando áudio da aba...');
-            
-            // Get the media stream using the stream ID
-            const constraints = {
-                audio: {
-                    mandatory: {
-                        chromeMediaSource: 'tab',
-                        chromeMediaSourceId: response.streamId
-                    }
+            if (this.useBackgroundRecording) {
+                // Use background recording (works when popup is closed)
+                this.updateStatus('Preparando gravação em background...');
+                
+                const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+                
+                if (!tab || !tab.id) {
+                    throw new Error('Não foi possível identificar a aba ativa');
                 }
-            };
-            
-            this.stream = await navigator.mediaDevices.getUserMedia(constraints);
-            
-            if (!this.stream) {
-                throw new Error('Falha ao capturar stream de áudio');
-            }
-            
-            console.log('Got media stream with', this.stream.getAudioTracks().length, 'audio tracks');
-            
+                
+                const response = await chrome.runtime.sendMessage({
+                    action: 'startBackgroundRecording',
+                    tabId: tab.id
+                });
+                
+                if (!response.success) {
+                    throw new Error(response.error || 'Falha ao iniciar gravação em background');
+                }
+                
+                this.isRecording = true;
+                this.startTime = Date.now();
+                this.updateRecordingUI();
+                this.startTimer();
+                this.updateStatus('🎙️ Gravando áudio da aba (em background)\n\nVocê pode fechar este popup e continuar usando o navegador. A gravação continuará.');
+                
+            } else {
+                // Original recording method (stops when popup closes)
+                this.updateStatus('Preparando para capturar áudio da aba...');
+
+                const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+                
+                if (!tab || !tab.id) {
+                    throw new Error('Não foi possível identificar a aba ativa');
+                }
+
+                this.updateStatus('Capturando áudio da aba atual...');
+
+                this.stream = await chrome.tabCapture.capture({
+                    audio: true,
+                    video: false
+                });
+
+                if (!this.stream) {
+                    throw new Error('Falha ao capturar áudio da aba. Certifique-se de que há áudio tocando na página.');
+                }
+
             // Initialize MediaRecorder
             const options = {
                 mimeType: 'audio/webm;codecs=opus'
             };
-            
+
             if (!MediaRecorder.isTypeSupported(options.mimeType)) {
                 options.mimeType = 'audio/webm';
                 if (!MediaRecorder.isTypeSupported(options.mimeType)) {
                     options.mimeType = 'audio/mp4';
                 }
             }
-            
+
             this.mediaRecorder = new MediaRecorder(this.stream, options);
             this.recordedChunks = [];
-            
+
             // Set up event handlers
             this.mediaRecorder.ondataavailable = (event) => {
                 if (event.data.size > 0) {
                     this.recordedChunks.push(event.data);
-                    console.log('Chunk recorded, size:', event.data.size);
                 }
             };
-            
+
             this.mediaRecorder.onstop = () => {
-                console.log('MediaRecorder stopped, processing...');
                 this.processRecording();
             };
-            
+
             // Start recording
-            this.mediaRecorder.start(1000);
+            this.mediaRecorder.start(1000); // Collect data every second
             this.isRecording = true;
             this.startTime = Date.now();
-            
-            // Update state in storage
-            await chrome.storage.local.set({
-                recordingState: {
-                    isRecording: true,
-                    startTime: this.startTime
-                }
-            });
-            
+
+            // Update UI
             this.updateRecordingUI();
             this.startTimer();
-            this.updateStatus('🎙️ Gravando áudio da aba\n\n⚠️ IMPORTANTE: Mantenha este popup aberto durante a gravação\n\n💡 O áudio da reunião/página está sendo capturado');
-            this.showSuccess('Gravação iniciada!');
+            this.updateStatus('Gravando... Fale no microfone');
 
         } catch (error) {
             console.error('Error starting recording:', error);
             
-            let errorMessage = 'Erro ao iniciar gravação';
+            // Clean up any partial state
+            if (this.stream) {
+                this.stream.getTracks().forEach(track => track.stop());
+                this.stream = null;
+            }
             
-            if (error.name === 'NotAllowedError') {
-                errorMessage = '❌ Permissão negada para capturar áudio da aba.\n\n💡 Certifique-se de permitir a captura quando solicitado.';
-            } else if (error.message.includes('stream ID')) {
-                errorMessage = '❌ Não foi possível capturar áudio.\n\n💡 Certifique-se de que:\n• A aba está ativa\n• A página está reproduzindo áudio\n• Não é uma página protegida (chrome://, etc.)';
+            // Provide user-friendly error messages
+            let errorMessage = 'Erro desconhecido';
+            
+            if (error.name === 'NotAllowedError' || error.message.includes('Permission denied') || error.message.includes('Permission dismissed')) {
+                errorMessage = 'Permissão de microfone negada. Por favor:\n\n1. Clique no ícone do cadeado na barra de endereços\n2. Permita o acesso ao microfone\n3. Recarregue a página e tente novamente';
+            } else if (error.name === 'NotFoundError') {
+                errorMessage = 'Nenhum microfone encontrado. Verifique se um microfone está conectado.';
+            } else if (error.name === 'NotReadableError') {
+                errorMessage = 'Microfone está sendo usado por outro aplicativo. Feche outros programas que possam estar usando o microfone.';
+            } else if (error.name === 'OverconstrainedError') {
+                errorMessage = 'Configurações de áudio não suportadas pelo seu microfone.';
+            } else if (error.name === 'SecurityError') {
+                errorMessage = 'Acesso ao microfone bloqueado por questões de segurança. Certifique-se de estar em uma conexão segura (HTTPS).';
             } else {
-                errorMessage = `Erro: ${error.message}`;
+                errorMessage = `Erro ao acessar o microfone: ${error.message}`;
             }
             
             this.showError(errorMessage);
-            this.updateStatus('Erro ao iniciar gravação');
+            this.updateStatus('Erro na gravação. Tente novamente.');
+        }
+    }
+
+    async stopRecording() {
+        try {
+            if (this.mediaRecorder && this.mediaRecorder.state !== 'inactive') {
+                this.mediaRecorder.stop();
+            }
+
+            if (this.stream) {
+                this.stream.getTracks().forEach(track => track.stop());
+                this.stream = null;
+            }
+
+            this.isRecording = false;
+            this.stopTimer();
+            this.updateStatus('Processando gravação...');
+            this.resetRecordingUI();
+
+        } catch (error) {
+            console.error('Error stopping recording:', error);
+            this.showError(`Erro ao parar gravação: ${error.message}`);
         }
     }
 
@@ -182,21 +223,19 @@ class AudioRecorder {
             // Create blob from recorded chunks
             const blob = new Blob(this.recordedChunks, { type: 'audio/webm' });
             
-            console.log('Recording blob created, size:', blob.size, 'chunks:', this.recordedChunks.length);
-            
             // Create audio URL for preview
             const audioUrl = URL.createObjectURL(blob);
             this.audioPlayer.src = audioUrl;
-            
-            // Store blob for upload
-            this.recordedBlob = blob;
             
             // Show preview and actions
             this.audioPreview.classList.remove('hidden');
             this.actions.classList.remove('hidden');
             
-            this.updateStatus(`Gravação concluída!\nDuração: ${((Date.now() - this.startTime) / 1000).toFixed(1)}s\nTamanho: ${(blob.size / 1024).toFixed(2)} KB`);
-            this.showSuccess('Áudio gravado com sucesso! Você pode ouvir e transcrever.');
+            // Store blob for upload
+            this.recordedBlob = blob;
+            
+            this.updateStatus('Gravação concluída! Você pode ouvir a prévia e enviar para transcrição.');
+            this.showSuccess('Áudio gravado com sucesso!');
 
         } catch (error) {
             console.error('Error processing recording:', error);
@@ -204,45 +243,9 @@ class AudioRecorder {
         }
     }
 
-    async stopRecording() {
-        try {
-            this.updateStatus('Parando gravação...');
-            
-            // Stop MediaRecorder
-            if (this.mediaRecorder && this.mediaRecorder.state !== 'inactive') {
-                this.mediaRecorder.stop();
-            }
-            
-            // Stop stream tracks
-            if (this.stream) {
-                this.stream.getTracks().forEach(track => {
-                    console.log('Stopping track:', track.kind);
-                    track.stop();
-                });
-                this.stream = null;
-            }
-            
-            this.isRecording = false;
-            this.stopTimer();
-            this.resetRecordingUI();
-            
-            // Update storage
-            await chrome.storage.local.set({
-                recordingState: { isRecording: false }
-            });
-            
-            // processRecording will be called by onstop event
-
-        } catch (error) {
-            console.error('Error stopping recording:', error);
-            this.showError(`Erro ao parar gravação: ${error.message}`);
-            this.resetRecordingUI();
-        }
-    }
-
     async uploadAudio() {
         if (!this.recordedBlob) {
-            this.showError('Nenhum áudio para enviar. Grave um áudio primeiro.');
+            this.showError('Nenhum áudio para enviar');
             return;
         }
 
@@ -272,9 +275,6 @@ class AudioRecorder {
             this.showProgress(100);
             this.updateStatus('Transcrição concluída!');
             this.showTranscriptionResult(result);
-            
-            // Clear the saved recording
-            await chrome.storage.local.remove(['lastRecording']);
 
         } catch (error) {
             console.error('Error uploading audio:', error);
@@ -287,6 +287,7 @@ class AudioRecorder {
 
     clearRecording() {
         // Reset all recording data
+        this.recordedChunks = [];
         this.recordedBlob = null;
         
         // Hide UI elements
@@ -303,11 +304,7 @@ class AudioRecorder {
         // Reset audio player
         this.audioPlayer.src = '';
         
-        // Clear storage
-        chrome.storage.local.remove(['lastRecording']);
-        
         this.showSuccess('Gravação limpa');
-        this.updateStatus('🎙️ Pronto para nova gravação');
     }
 
     updateRecordingUI() {
@@ -370,7 +367,9 @@ class AudioRecorder {
         `;
         
         this.status.innerHTML = resultHTML;
-        this.showSuccess('✅ Transcrição salva! Veja no dashboard');
+        
+        // Show success message
+        this.showSuccess('Transcrição salva! Verifique o dashboard para ver todas as transcrições.');
     }
 
     showProgress(percentage) {
@@ -385,7 +384,6 @@ class AudioRecorder {
     showError(message) {
         const errorDiv = document.createElement('div');
         errorDiv.className = 'error';
-        errorDiv.style.whiteSpace = 'pre-line';
         errorDiv.textContent = message;
         this.messages.appendChild(errorDiv);
         
@@ -393,7 +391,7 @@ class AudioRecorder {
             if (errorDiv.parentNode) {
                 errorDiv.parentNode.removeChild(errorDiv);
             }
-        }, 7000);
+        }, 5000);
     }
 
     showSuccess(message) {
@@ -406,7 +404,7 @@ class AudioRecorder {
             if (successDiv.parentNode) {
                 successDiv.parentNode.removeChild(successDiv);
             }
-        }, 4000);
+        }, 3000);
     }
 
     clearMessages() {
