@@ -1,4 +1,4 @@
-# 🎙️ Audio Transcriber
+# 🎙️ NoteAI-ChromeExtension
 
 [![Version](https://img.shields.io/badge/version-1.0.0-blue.svg)](https://github.com/VictorGHaddad/audio-transcriber/releases/tag/v1.0.0)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
