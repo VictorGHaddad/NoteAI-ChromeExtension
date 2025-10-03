@@ -19,6 +19,13 @@ import {
   Chip,
   Divider,
   Paper,
+  ToggleButtonGroup,
+  ToggleButton,
+  Menu,
+  MenuItem,
+  Select,
+  FormControl,
+  InputLabel,
 } from '@mui/material'
 import {
   Mic,
@@ -27,8 +34,15 @@ import {
   Close,
   MoreVert,
   Replay,
+  Download,
+  ViewComfy,
+  ViewStream,
+  ViewCompact,
+  TextFields,
 } from '@mui/icons-material'
 import axios from 'axios'
+import { jsPDF } from 'jspdf'
+import { saveAs } from 'file-saver'
 
 const API_BASE_URL = 'http://10.0.0.111:8000/api'
 
@@ -38,6 +52,9 @@ function App() {
   const [error, setError] = useState('')
   const [selectedTranscription, setSelectedTranscription] = useState(null)
   const [dialogOpen, setDialogOpen] = useState(false)
+  const [viewMode, setViewMode] = useState(() => localStorage.getItem('viewMode') || 'normal')
+  const [fontSize, setFontSize] = useState(() => localStorage.getItem('fontSize') || 'medium')
+  const [exportMenuAnchor, setExportMenuAnchor] = useState(null)
 
   useEffect(() => {
     fetchTranscriptions()
@@ -112,6 +129,143 @@ function App() {
     setDialogOpen(true)
   }
 
+  // Export functions
+  const exportAsPDF = (transcription) => {
+    const doc = new jsPDF()
+    const pageWidth = doc.internal.pageSize.width
+    const pageHeight = doc.internal.pageSize.height
+    const margin = 20
+    const maxWidth = pageWidth - 2 * margin
+    let y = margin
+
+    // Helper to add text with wrapping
+    const addText = (text, fontSize = 10, isBold = false) => {
+      doc.setFontSize(fontSize)
+      doc.setFont(undefined, isBold ? 'bold' : 'normal')
+      const lines = doc.splitTextToSize(text, maxWidth)
+      
+      lines.forEach(line => {
+        if (y + 10 > pageHeight - margin) {
+          doc.addPage()
+          y = margin
+        }
+        doc.text(line, margin, y)
+        y += fontSize / 2 + 2
+      })
+      y += 3
+    }
+
+    // Title
+    addText('ATA DE REUNIÃO', 16, true)
+    y += 5
+
+    // Extract date/time from summary if present
+    const dateMatch = transcription.summary.match(/Data:\s*(.+)/i)
+    const timeMatch = transcription.summary.match(/Hora:\s*(.+)/i)
+    
+    if (dateMatch) addText(dateMatch[0], 10)
+    if (timeMatch) addText(timeMatch[0], 10)
+    addText(`Arquivo: ${transcription.filename}`, 10)
+    if (transcription.duration) addText(`Duração: ${formatDuration(transcription.duration)}`, 10)
+    if (transcription.language) addText(`Idioma: ${transcription.language}`, 10)
+    
+    y += 10
+
+    // Summary
+    addText(transcription.summary, 10)
+
+    // Save
+    const filename = `ata_${transcription.filename.replace(/\.[^/.]+$/, '')}.pdf`
+    doc.save(filename)
+  }
+
+  const exportAsText = (transcription) => {
+    const content = `ATA DE REUNIÃO
+
+${transcription.summary}
+
+=====================================
+TRANSCRIÇÃO COMPLETA
+=====================================
+
+${transcription.text}
+
+=====================================
+Informações do Arquivo
+=====================================
+Arquivo: ${transcription.filename}
+Data: ${formatDate(transcription.created_at)}
+${transcription.duration ? `Duração: ${formatDuration(transcription.duration)}` : ''}
+${transcription.language ? `Idioma: ${transcription.language}` : ''}
+`
+    const blob = new Blob([content], { type: 'text/plain;charset=utf-8' })
+    const filename = `ata_${transcription.filename.replace(/\.[^/.]+$/, '')}.txt`
+    saveAs(blob, filename)
+  }
+
+  const exportAsMarkdown = (transcription) => {
+    const content = `# ATA DE REUNIÃO
+
+${transcription.summary}
+
+---
+
+## TRANSCRIÇÃO COMPLETA
+
+${transcription.text}
+
+---
+
+### Informações do Arquivo
+
+- **Arquivo:** ${transcription.filename}
+- **Data:** ${formatDate(transcription.created_at)}
+${transcription.duration ? `- **Duração:** ${formatDuration(transcription.duration)}` : ''}
+${transcription.language ? `- **Idioma:** ${transcription.language}` : ''}
+`
+    const blob = new Blob([content], { type: 'text/markdown;charset=utf-8' })
+    const filename = `ata_${transcription.filename.replace(/\.[^/.]+$/, '')}.md`
+    saveAs(blob, filename)
+  }
+
+  // View mode handlers
+  const handleViewModeChange = (event, newMode) => {
+    if (newMode !== null) {
+      setViewMode(newMode)
+      localStorage.setItem('viewMode', newMode)
+    }
+  }
+
+  const handleFontSizeChange = (event) => {
+    setFontSize(event.target.value)
+    localStorage.setItem('fontSize', event.target.value)
+  }
+
+  const handleExportClick = (event) => {
+    setExportMenuAnchor(event.currentTarget)
+  }
+
+  const handleExportClose = () => {
+    setExportMenuAnchor(null)
+  }
+
+  const handleExport = (format) => {
+    if (!selectedTranscription) return
+    
+    switch (format) {
+      case 'pdf':
+        exportAsPDF(selectedTranscription)
+        break
+      case 'txt':
+        exportAsText(selectedTranscription)
+        break
+      case 'md':
+        exportAsMarkdown(selectedTranscription)
+        break
+    }
+    handleExportClose()
+  }
+
   const getTotalStats = () => {
     const total = transcriptions.length
     const totalDuration = transcriptions.reduce((acc, t) => acc + (t.duration || 0), 0)
@@ -175,6 +329,95 @@ function App() {
       </AppBar>
 
       <Container maxWidth="lg" sx={{ py: 4 }}>
+        {/* View Controls */}
+        <Paper 
+          elevation={0}
+          sx={{ 
+            p: 2,
+            mb: 3,
+            border: '1px solid #e5e5e5',
+            borderRadius: '12px',
+            bgcolor: 'white',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            flexWrap: 'wrap',
+            gap: 2,
+          }}
+        >
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+            <Typography variant="body2" sx={{ color: '#666', fontWeight: 500 }}>
+              Visualização:
+            </Typography>
+            <ToggleButtonGroup
+              value={viewMode}
+              exclusive
+              onChange={handleViewModeChange}
+              size="small"
+              sx={{
+                '& .MuiToggleButton-root': {
+                  border: '1px solid #e5e5e5',
+                  color: '#666',
+                  textTransform: 'none',
+                  '&.Mui-selected': {
+                    bgcolor: 'black',
+                    color: 'white',
+                    '&:hover': {
+                      bgcolor: '#333',
+                    }
+                  },
+                  '&:hover': {
+                    bgcolor: '#f5f5f5',
+                  }
+                }
+              }}
+            >
+              <ToggleButton value="compact">
+                <ViewCompact sx={{ mr: 0.5, fontSize: 18 }} />
+                Compacto
+              </ToggleButton>
+              <ToggleButton value="normal">
+                <ViewStream sx={{ mr: 0.5, fontSize: 18 }} />
+                Normal
+              </ToggleButton>
+              <ToggleButton value="expanded">
+                <ViewComfy sx={{ mr: 0.5, fontSize: 18 }} />
+                Expandido
+              </ToggleButton>
+            </ToggleButtonGroup>
+          </Box>
+
+          <FormControl size="small" sx={{ minWidth: 150 }}>
+            <InputLabel>Tamanho da Fonte</InputLabel>
+            <Select
+              value={fontSize}
+              label="Tamanho da Fonte"
+              onChange={handleFontSizeChange}
+              sx={{
+                '& .MuiOutlinedInput-notchedOutline': {
+                  borderColor: '#e5e5e5',
+                },
+                '&:hover .MuiOutlinedInput-notchedOutline': {
+                  borderColor: '#d4d4d4',
+                },
+              }}
+            >
+              <MenuItem value="small">
+                <TextFields sx={{ mr: 1, fontSize: 16 }} />
+                Pequeno
+              </MenuItem>
+              <MenuItem value="medium">
+                <TextFields sx={{ mr: 1, fontSize: 18 }} />
+                Médio
+              </MenuItem>
+              <MenuItem value="large">
+                <TextFields sx={{ mr: 1, fontSize: 20 }} />
+                Grande
+              </MenuItem>
+            </Select>
+          </FormControl>
+        </Paper>
+
         {/* Stats Bar */}
         <Paper 
           elevation={0}
@@ -275,110 +518,139 @@ function App() {
           </Paper>
         ) : (
           <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-            {transcriptions.map((transcription) => (
-              <Paper
-                key={transcription.id}
-                elevation={0}
-                sx={{
-                  p: 3,
-                  border: '1px solid #e5e5e5',
-                  borderRadius: '12px',
-                  bgcolor: 'white',
-                  cursor: 'pointer',
-                  transition: 'all 0.2s ease',
-                  '&:hover': {
-                    borderColor: '#ccc',
-                    boxShadow: '0 2px 8px rgba(0,0,0,0.04)',
-                  },
-                }}
-                onClick={() => openTranscriptionDialog(transcription)}
-              >
-                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                  <Box sx={{ flex: 1, mr: 2 }}>
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
+            {transcriptions.map((transcription) => {
+              const getFontSize = () => {
+                switch (fontSize) {
+                  case 'small': return { title: '0.85rem', body: '0.8rem', caption: '0.7rem' }
+                  case 'large': return { title: '1.1rem', body: '1rem', caption: '0.85rem' }
+                  default: return { title: '0.95rem', body: '0.9rem', caption: '0.8rem' }
+                }
+              }
+
+              const getLineClamp = () => {
+                switch (viewMode) {
+                  case 'compact': return 1
+                  case 'expanded': return 6
+                  default: return 2
+                }
+              }
+
+              const getPadding = () => {
+                switch (viewMode) {
+                  case 'compact': return 2
+                  case 'expanded': return 4
+                  default: return 3
+                }
+              }
+
+              const sizes = getFontSize()
+
+              return (
+                <Paper
+                  key={transcription.id}
+                  elevation={0}
+                  sx={{
+                    p: getPadding(),
+                    border: '1px solid #e5e5e5',
+                    borderRadius: '12px',
+                    bgcolor: 'white',
+                    cursor: 'pointer',
+                    transition: 'all 0.2s ease',
+                    '&:hover': {
+                      borderColor: '#ccc',
+                      boxShadow: '0 2px 8px rgba(0,0,0,0.04)',
+                    },
+                  }}
+                  onClick={() => openTranscriptionDialog(transcription)}
+                >
+                  <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                    <Box sx={{ flex: 1, mr: 2 }}>
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
+                        <Typography 
+                          variant="body1" 
+                          sx={{ 
+                            color: 'black',
+                            fontWeight: 600,
+                            fontSize: sizes.title,
+                          }}
+                        >
+                          {transcription.filename}
+                        </Typography>
+                        {transcription.summary && (
+                          <Chip 
+                            label="Resumido" 
+                            size="small"
+                            sx={{ 
+                              height: 20,
+                              fontSize: '0.7rem',
+                              bgcolor: '#f5f5f5',
+                              color: '#666',
+                              fontWeight: 500,
+                            }}
+                          />
+                        )}
+                      </Box>
+                      
                       <Typography 
-                        variant="body1" 
+                        variant="body2" 
                         sx={{ 
-                          color: 'black',
-                          fontWeight: 600,
-                          fontSize: '0.95rem',
+                          color: '#666',
+                          fontSize: sizes.body,
+                          mb: viewMode === 'compact' ? 1 : 2,
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis',
+                          display: '-webkit-box',
+                          WebkitLineClamp: getLineClamp(),
+                          WebkitBoxOrient: 'vertical',
+                          lineHeight: viewMode === 'expanded' ? 1.6 : 1.5,
                         }}
                       >
-                        {transcription.filename}
+                        {transcription.text}
                       </Typography>
-                      {transcription.summary && (
-                        <Chip 
-                          label="Resumido" 
-                          size="small"
-                          sx={{ 
-                            height: 20,
-                            fontSize: '0.7rem',
-                            bgcolor: '#f5f5f5',
-                            color: '#666',
-                            fontWeight: 500,
-                          }}
-                        />
-                      )}
+
+                      <Box sx={{ display: 'flex', gap: 2, alignItems: 'center' }}>
+                        <Typography variant="caption" sx={{ color: '#999', fontSize: sizes.caption }}>
+                          {formatDate(transcription.created_at)}
+                        </Typography>
+                        {transcription.duration && (
+                          <>
+                            <Box sx={{ width: 3, height: 3, borderRadius: '50%', bgcolor: '#ddd' }} />
+                            <Typography variant="caption" sx={{ color: '#999', fontSize: sizes.caption }}>
+                              {formatDuration(transcription.duration)}
+                            </Typography>
+                          </>
+                        )}
+                        {transcription.language && (
+                          <>
+                            <Box sx={{ width: 3, height: 3, borderRadius: '50%', bgcolor: '#ddd' }} />
+                            <Typography variant="caption" sx={{ color: '#999', fontSize: sizes.caption }}>
+                              {transcription.language.toUpperCase()}
+                            </Typography>
+                          </>
+                        )}
+                      </Box>
                     </Box>
-                    
-                    <Typography 
-                      variant="body2" 
+
+                    <IconButton 
+                      size="small"
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        deleteTranscription(transcription.id)
+                      }}
                       sx={{ 
-                        color: '#666',
-                        mb: 2,
-                        overflow: 'hidden',
-                        textOverflow: 'ellipsis',
-                        display: '-webkit-box',
-                        WebkitLineClamp: 2,
-                        WebkitBoxOrient: 'vertical',
-                        lineHeight: 1.5,
+                        color: '#999',
+                        '&:hover': { 
+                          color: '#d32f2f',
+                          bgcolor: '#fee'
+                        }
                       }}
                     >
-                      {transcription.text}
-                    </Typography>
-
-                    <Box sx={{ display: 'flex', gap: 2, alignItems: 'center' }}>
-                      <Typography variant="caption" sx={{ color: '#999', fontSize: '0.8rem' }}>
-                        {formatDate(transcription.created_at)}
-                      </Typography>
-                      {transcription.duration && (
-                        <>
-                          <Box sx={{ width: 3, height: 3, borderRadius: '50%', bgcolor: '#ddd' }} />
-                          <Typography variant="caption" sx={{ color: '#999', fontSize: '0.8rem' }}>
-                            {formatDuration(transcription.duration)}
-                          </Typography>
-                        </>
-                      )}
-                      {transcription.language && (
-                        <>
-                          <Box sx={{ width: 3, height: 3, borderRadius: '50%', bgcolor: '#ddd' }} />
-                          <Typography variant="caption" sx={{ color: '#999', fontSize: '0.8rem' }}>
-                            {transcription.language.toUpperCase()}
-                          </Typography>
-                        </>
-                      )}
-                    </Box>
+                      <Delete fontSize="small" />
+                    </IconButton>
                   </Box>
-
-                  <IconButton 
-                    size="small"
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      deleteTranscription(transcription.id)
-                    }}
-                    sx={{ 
-                      color: '#999',
-                      '&:hover': { 
-                        color: '#d32f2f',
-                        bgcolor: '#fee'
-                      }
-                    }}
-                  >
-                    <Delete fontSize="small" />
-                  </IconButton>
-                </Box>
-              </Paper>
-            ))}
+                </Paper>
+              )
+            })}
           </Box>
         )}
       </Container>
@@ -530,7 +802,7 @@ function App() {
               )}
             </DialogContent>
             
-            <DialogActions sx={{ px: 3, pb: 3, pt: 0 }}>
+            <DialogActions sx={{ px: 3, pb: 3, pt: 0, justifyContent: 'space-between' }}>
               <Button 
                 onClick={() => deleteTranscription(selectedTranscription.id)}
                 startIcon={<Delete />}
@@ -542,6 +814,46 @@ function App() {
               >
                 Deletar
               </Button>
+              
+              <Box>
+                <Button
+                  startIcon={<Download />}
+                  onClick={handleExportMenuOpen}
+                  sx={{
+                    color: '#000',
+                    textTransform: 'none',
+                    '&:hover': { bgcolor: '#f5f5f5' }
+                  }}
+                >
+                  Exportar
+                </Button>
+                <Menu
+                  anchorEl={exportMenuAnchor}
+                  open={Boolean(exportMenuAnchor)}
+                  onClose={handleExportMenuClose}
+                  MenuListProps={{
+                    sx: {
+                      '& .MuiMenuItem-root': {
+                        fontSize: '14px',
+                        py: 1.5,
+                        '&:hover': {
+                          bgcolor: '#f5f5f5'
+                        }
+                      }
+                    }
+                  }}
+                >
+                  <MenuItem onClick={() => { exportAsPDF(); handleExportMenuClose(); }}>
+                    PDF
+                  </MenuItem>
+                  <MenuItem onClick={() => { exportAsText(); handleExportMenuClose(); }}>
+                    Texto (.txt)
+                  </MenuItem>
+                  <MenuItem onClick={() => { exportAsMarkdown(); handleExportMenuClose(); }}>
+                    Markdown (.md)
+                  </MenuItem>
+                </Menu>
+              </Box>
             </DialogActions>
           </>
         )}
