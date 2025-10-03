@@ -1,6 +1,6 @@
-# 🎙️ Audio Transcriber
+# 🎙️ NoteAI - Chrome Extension
 
-[![Version](https://img.shields.io/badge/version-1.0.0-blue.svg)](https://github.com/VictorGHaddad/audio-transcriber/releases/tag/v1.0.0)
+[![Version](https://img.shields.io/badge/version-1.0.1-blue.svg)](https://github.com/VictorGHaddad/NoteAI-ChromeExtension/releases/tag/v1.0.1)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 
 Um monorepo completo para transcrição de áudio usando IA, com extensão Chrome, backend FastAPI e dashboard React.

@@ -5,6 +5,26 @@ Todas as mudanças notáveis neste projeto serão documentadas neste arquivo.
 O formato é baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/),
 e este projeto adere ao [Semantic Versioning](https://semver.org/lang/pt-BR/).
 
+## [1.0.1] - 2025-10-03
+
+### 🐛 Corrigido
+- **Dashboard `.env` faltando**: Dashboard não carregava transcrições devido ao arquivo `.env` ausente
+- **CORS e conectividade**: Ajustada URL da API para funcionar corretamente com Docker
+- **`.gitignore` incorreto**: Removida exclusão de arquivos Docker essenciais (Dockerfile, docker-compose.yml)
+- **URL remota**: Atualizado remote do Git para o novo repositório `NoteAI-ChromeExtension`
+
+### 🔧 Alterado
+- Renomeado projeto de "Audio Transcriber" para "NoteAI"
+- Dashboard `.env` agora usa IP correto da VM para acesso remoto
+- Documentação atualizada com o novo nome do repositório
+
+### 📝 Documentação
+- Corrigido `.gitignore` para incluir arquivos Docker no repositório
+- Adicionado `dashboard/.env.example` com configuração correta
+- Atualizado `CONFIGURATION.md` com instruções de ambiente
+
+---
+
 ## [1.0.0] - 2025-10-03
 
 ### 🎉 Primeira Release Oficial
