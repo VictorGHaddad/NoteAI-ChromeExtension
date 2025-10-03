@@ -107,10 +107,8 @@ public
 # TernJS port file
 .tern-port
 
-# Docker
-.dockerignore
-Dockerfile
-docker-compose*.yml
+# Docker (apenas ignora overrides locais opcionais)
+docker-compose.override.yml
 
 # IDE
 .vscode/
