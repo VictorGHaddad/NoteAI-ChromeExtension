@@ -43,6 +43,8 @@ class AudioRecorder {
 
     async checkRecordingState() {
         try {
+            console.log('🔍 Checking recording state...');
+            
             // Check if chrome runtime is available
             if (!chrome || !chrome.runtime || !chrome.runtime.sendMessage) {
                 console.warn('Chrome runtime API not available');
@@ -52,14 +54,27 @@ class AudioRecorder {
             
             // Check if there's a recording in progress
             const response = await chrome.runtime.sendMessage({ action: 'getRecordingState' });
+            console.log('📡 Recording state response:', response);
             
             if (response && response.success && response.isRecording) {
+                console.log('✅ Recording in progress detected!');
+                console.log('Start time from response:', response.startTime);
+                console.log('Start time as Date:', new Date(response.startTime));
+                
                 this.isRecording = true;
                 this.startTime = response.startTime;
+                
+                console.log('Setting UI to recording state...');
                 this.updateRecordingUI();
                 this.startTimer();
+                
+                const elapsed = Date.now() - this.startTime;
+                const seconds = Math.floor(elapsed / 1000);
+                console.log(`⏱️ Recording for ${seconds} seconds`);
+                
                 this.updateStatus('🎙️ Gravação em andamento\n\n✅ Rodando em background\n✅ Você pode fechar este popup');
             } else {
+                console.log('ℹ️ No active recording');
                 this.updateStatus('🎙️ Pronto para gravar áudio da aba\n\n💡 A gravação capturará o áudio da reunião/página\n✅ Grava em background\n✅ Áudio continua tocando normalmente');
             }
             
@@ -72,7 +87,7 @@ class AudioRecorder {
                 }
             }
         } catch (error) {
-            console.log('Error checking recording state:', error);
+            console.error('❌ Error checking recording state:', error);
             this.updateStatus('🎙️ Pronto para gravar áudio da aba');
         }
     }
@@ -107,6 +122,24 @@ class AudioRecorder {
             
             if (!response || !response.success) {
                 throw new Error(response?.error || 'Falha ao iniciar gravação');
+            }
+            
+            // Check if already recording
+            if (response.alreadyRecording) {
+                console.log('Already recording - updating UI state');
+                this.isRecording = true;
+                // Try to get the start time from storage
+                const state = await chrome.runtime.sendMessage({ action: 'getRecordingState' });
+                if (state && state.startTime) {
+                    this.startTime = state.startTime;
+                } else {
+                    this.startTime = Date.now();
+                }
+                this.updateRecordingUI();
+                this.startTimer();
+                this.updateStatus('🎙️ Gravando áudio da aba\n\n✅ Rodando em background\n✅ Áudio tocando normalmente\n✅ Pode fechar o popup\n\n💡 Reabra para parar a gravação');
+                this.showSuccess('Gravação já em andamento!');
+                return;
             }
             
             this.isRecording = true;
@@ -309,21 +342,41 @@ class AudioRecorder {
     }
 
     startTimer() {
-        this.timerInterval = setInterval(() => {
+        console.log('🕐 Starting timer with startTime:', this.startTime, new Date(this.startTime));
+        
+        // Clear any existing timer
+        if (this.timerInterval) {
+            clearInterval(this.timerInterval);
+        }
+        
+        // Update immediately
+        const updateTimer = () => {
             const elapsed = Date.now() - this.startTime;
             const seconds = Math.floor(elapsed / 1000);
             const minutes = Math.floor(seconds / 60);
             const displaySeconds = seconds % 60;
             
-            this.timer.textContent = 
-                `${minutes.toString().padStart(2, '0')}:${displaySeconds.toString().padStart(2, '0')}`;
-        }, 1000);
+            const timeString = `${minutes.toString().padStart(2, '0')}:${displaySeconds.toString().padStart(2, '0')}`;
+            this.timer.textContent = timeString;
+            console.log('⏱️ Timer update:', timeString);
+        };
+        
+        // Update now
+        updateTimer();
+        
+        // Then update every second
+        this.timerInterval = setInterval(updateTimer, 1000);
+        console.log('✅ Timer started');
     }
 
     stopTimer() {
+        console.log('🛑 Stopping timer');
         if (this.timerInterval) {
             clearInterval(this.timerInterval);
             this.timerInterval = null;
+            console.log('✅ Timer stopped');
+        } else {
+            console.log('⚠️ No timer to stop');
         }
     }
 

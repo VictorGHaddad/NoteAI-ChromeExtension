@@ -10,6 +10,24 @@ let recordingState = {
 
 let offscreenDocumentCreated = false;
 
+// Restore state from storage on startup
+async function restoreState() {
+    try {
+        const stored = await chrome.storage.local.get(['recordingState']);
+        if (stored.recordingState) {
+            recordingState.isRecording = stored.recordingState.isRecording || false;
+            recordingState.startTime = stored.recordingState.startTime || null;
+            recordingState.tabId = stored.recordingState.tabId || null;
+            console.log('State restored from storage:', JSON.stringify(recordingState));
+        }
+    } catch (error) {
+        console.error('Error restoring state:', error);
+    }
+}
+
+// Restore state on startup
+restoreState();
+
 // Extension installation handler
 chrome.runtime.onInstalled.addListener((details) => {
     console.log('Audio Transcriber Extension installed/updated:', details.reason);
@@ -90,10 +108,26 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 
 async function handleStartRecording(tabId) {
     try {
-        console.log('Starting background recording for tab:', tabId);
+        console.log('=== START RECORDING REQUEST ===');
+        console.log('Tab ID:', tabId);
+        console.log('Current state before start:', JSON.stringify(recordingState));
+        
+        // Check if already recording
+        if (recordingState.isRecording) {
+            console.warn('⚠️ Already recording! Tab:', recordingState.tabId);
+            if (recordingState.tabId === tabId) {
+                return { 
+                    message: 'Already recording this tab',
+                    alreadyRecording: true 
+                };
+            } else {
+                throw new Error('Already recording another tab. Stop that recording first.');
+            }
+        }
         
         // Setup offscreen document
         await setupOffscreenDocument();
+        console.log('Offscreen document ready');
         
         // Get stream ID
         const streamId = await new Promise((resolve, reject) => {
@@ -118,6 +152,8 @@ async function handleStartRecording(tabId) {
             streamId: streamId
         });
         
+        console.log('Offscreen response:', response);
+        
         if (!response || !response.success) {
             throw new Error(response?.error || 'Failed to start recording in offscreen document');
         }
@@ -127,28 +163,36 @@ async function handleStartRecording(tabId) {
         recordingState.startTime = Date.now();
         recordingState.tabId = tabId;
         
+        console.log('Updated recording state:', JSON.stringify(recordingState));
+        
         await chrome.storage.local.set({
             recordingState: {
                 isRecording: true,
-                startTime: recordingState.startTime
+                startTime: recordingState.startTime,
+                tabId: tabId
             }
         });
         
-        console.log('Recording started successfully');
+        console.log('State saved to storage');
+        console.log('=== RECORDING STARTED SUCCESSFULLY ===');
+        
         return { message: 'Recording started in background' };
         
     } catch (error) {
-        console.error('Error starting recording:', error);
+        console.error('=== ERROR STARTING RECORDING ===');
+        console.error('Error:', error);
         throw error;
     }
 }
 
 async function handleStopRecording() {
     try {
-        console.log('Stopping background recording');
+        console.log('=== STOP RECORDING REQUEST ===');
+        console.log('Current state before stop:', JSON.stringify(recordingState));
         
         if (!recordingState.isRecording) {
-            console.warn('No recording in progress');
+            console.warn('⚠️ No recording in progress!');
+            console.log('State shows not recording - returning warning');
             return {
                 message: 'No recording in progress',
                 size: 0,
@@ -157,10 +201,14 @@ async function handleStopRecording() {
             };
         }
         
+        console.log('Sending stop message to offscreen document...');
+        
         // Send message to offscreen to stop recording
         const response = await chrome.runtime.sendMessage({
             action: 'stopRecording'
         });
+        
+        console.log('Offscreen stop response:', response);
         
         if (!response || !response.success) {
             throw new Error(response?.error || 'Failed to stop recording');
@@ -177,9 +225,9 @@ async function handleStopRecording() {
                     chunks: response.chunks
                 }
             });
-            console.log('Recording saved to storage successfully');
+            console.log('✅ Recording saved to storage successfully');
         } else {
-            console.warn('No audio data received from offscreen document');
+            console.warn('⚠️ No audio data received from offscreen document');
         }
         
         // Update state
@@ -187,11 +235,15 @@ async function handleStopRecording() {
         recordingState.startTime = null;
         recordingState.tabId = null;
         
+        console.log('Updated recording state:', JSON.stringify(recordingState));
+        
         await chrome.storage.local.set({
             recordingState: { isRecording: false }
         });
         
-        console.log('Recording stopped successfully');
+        console.log('State saved to storage');
+        console.log('=== RECORDING STOPPED SUCCESSFULLY ===');
+        
         return {
             message: 'Recording stopped',
             size: response.size,
@@ -200,7 +252,8 @@ async function handleStopRecording() {
         };
         
     } catch (error) {
-        console.error('Error stopping recording:', error);
+        console.error('=== ERROR STOPPING RECORDING ===');
+        console.error('Error:', error);
         
         // Reset state even on error
         recordingState.isRecording = false;

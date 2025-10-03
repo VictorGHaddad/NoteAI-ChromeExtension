@@ -3,9 +3,11 @@ console.log('Offscreen document loaded');
 
 let mediaRecorder = null;
 let recordedChunks = [];
-let stream = null;
+let tabStream = null;
+let micStream = null;
 let audioContext = null;
-let source = null;
+let audioElement = null;
+let mixedStream = null;
 
 // Listen for messages from the background script
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
@@ -32,8 +34,8 @@ async function startRecording(streamId) {
     try {
         console.log('Starting recording with stream ID:', streamId);
         
-        // Get the media stream
-        const constraints = {
+        // Get the tab audio stream
+        const tabConstraints = {
             audio: {
                 mandatory: {
                     chromeMediaSource: 'tab',
@@ -42,23 +44,60 @@ async function startRecording(streamId) {
             }
         };
         
-        stream = await navigator.mediaDevices.getUserMedia(constraints);
-        console.log('Got media stream');
+        tabStream = await navigator.mediaDevices.getUserMedia(tabConstraints);
+        console.log('Got tab audio stream');
         
-        // Create AudioContext to monitor and pass through audio
+        // Get microphone stream
+        try {
+            micStream = await navigator.mediaDevices.getUserMedia({ 
+                audio: {
+                    echoCancellation: true,
+                    noiseSuppression: true,
+                    autoGainControl: true
+                }
+            });
+            console.log('Got microphone stream');
+        } catch (micError) {
+            console.warn('Could not get microphone:', micError);
+            console.log('Recording will continue with tab audio only');
+        }
+        
+        // Create AudioContext to mix streams
         audioContext = new AudioContext();
-        source = audioContext.createMediaStreamSource(stream);
-        
-        // Create a destination to keep audio playing
         const destination = audioContext.createMediaStreamDestination();
-        source.connect(destination);
         
-        // Also connect to audio context destination to ensure audio plays
-        source.connect(audioContext.destination);
+        // Connect tab audio
+        const tabSource = audioContext.createMediaStreamSource(tabStream);
+        tabSource.connect(destination);
+        console.log('Tab audio connected to mixer');
         
-        console.log('Audio routing configured - audio should play through');
+        // Connect microphone if available
+        if (micStream) {
+            const micSource = audioContext.createMediaStreamSource(micStream);
+            micSource.connect(destination);
+            console.log('Microphone connected to mixer');
+        }
         
-        // Setup MediaRecorder with the original stream
+        // Use mixed stream for recording
+        mixedStream = destination.stream;
+        
+        // Play tab audio through speakers (so you can hear others)
+        audioElement = document.getElementById('audioPlayback');
+        if (!audioElement) {
+            audioElement = new Audio();
+            audioElement.autoplay = true;
+        }
+        audioElement.srcObject = tabStream; // Only play tab audio, not your own mic
+        
+        try {
+            await audioElement.play();
+            console.log('Audio playback started - you should hear the tab audio');
+        } catch (err) {
+            console.warn('Could not start audio playback:', err);
+            audioElement.play().catch(e => console.error('Playback failed:', e));
+        }
+        
+        // Setup MediaRecorder with mixed stream
         const options = {
             mimeType: 'audio/webm;codecs=opus'
         };
@@ -67,7 +106,7 @@ async function startRecording(streamId) {
             options.mimeType = 'audio/webm';
         }
         
-        mediaRecorder = new MediaRecorder(stream, options);
+        mediaRecorder = new MediaRecorder(mixedStream, options);
         recordedChunks = [];
         
         mediaRecorder.ondataavailable = (event) => {
@@ -82,7 +121,7 @@ async function startRecording(streamId) {
         };
         
         mediaRecorder.start(1000);
-        console.log('Recording started');
+        console.log('Recording started - capturing tab audio + microphone');
         
     } catch (error) {
         console.error('Error in startRecording:', error);
@@ -115,15 +154,16 @@ async function stopRecording() {
         // Wait for final chunks
         await new Promise(resolve => setTimeout(resolve, 500));
         
-        // Stop audio context
-        if (audioContext) {
+        // Stop audio playback
+        if (audioElement) {
             try {
-                await audioContext.close();
-                console.log('AudioContext closed');
+                audioElement.pause();
+                audioElement.srcObject = null;
+                console.log('Audio playback stopped');
             } catch (e) {
-                console.warn('Error closing AudioContext:', e);
+                console.warn('Error stopping audio playback:', e);
             }
-            audioContext = null;
+            audioElement = null;
         }
         
         // Stop stream
@@ -176,9 +216,12 @@ async function stopRecording() {
         console.error('Error in stopRecording:', error);
         
         // Clean up even on error
-        if (audioContext) {
-            try { await audioContext.close(); } catch (e) {}
-            audioContext = null;
+        if (audioElement) {
+            try { 
+                audioElement.pause();
+                audioElement.srcObject = null;
+            } catch (e) {}
+            audioElement = null;
         }
         if (stream) {
             stream.getTracks().forEach(track => {
