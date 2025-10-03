@@ -874,13 +874,13 @@ ${transcription.language ? `- **Idioma:** ${transcription.language}` : ''}
                     }
                   }}
                 >
-                  <MenuItem onClick={() => { exportAsPDF(); handleExportMenuClose(); }}>
+                  <MenuItem onClick={() => { exportAsPDF(selectedTranscription); handleExportMenuClose(); }}>
                     PDF
                   </MenuItem>
-                  <MenuItem onClick={() => { exportAsText(); handleExportMenuClose(); }}>
+                  <MenuItem onClick={() => { exportAsText(selectedTranscription); handleExportMenuClose(); }}>
                     Texto (.txt)
                   </MenuItem>
-                  <MenuItem onClick={() => { exportAsMarkdown(); handleExportMenuClose(); }}>
+                  <MenuItem onClick={() => { exportAsMarkdown(selectedTranscription); handleExportMenuClose(); }}>
                     Markdown (.md)
                   </MenuItem>
                 </Menu>
