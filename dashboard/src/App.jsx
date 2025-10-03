@@ -125,70 +125,93 @@ function App() {
   }
 
   const openTranscriptionDialog = (transcription) => {
-    setSelectedTranscription(transcription)
-    setDialogOpen(true)
+    try {
+      console.log('Opening transcription:', transcription)
+      setSelectedTranscription(transcription)
+      setDialogOpen(true)
+    } catch (error) {
+      console.error('Error opening transcription dialog:', error)
+      alert('Erro ao abrir transcrição: ' + error.message)
+    }
   }
 
   // Export functions
   const exportAsPDF = (transcription) => {
-    const doc = new jsPDF()
-    const pageWidth = doc.internal.pageSize.width
-    const pageHeight = doc.internal.pageSize.height
-    const margin = 20
-    const maxWidth = pageWidth - 2 * margin
-    let y = margin
+    try {
+      console.log('Exporting PDF for:', transcription)
+      const doc = new jsPDF()
+      const pageWidth = doc.internal.pageSize.width
+      const pageHeight = doc.internal.pageSize.height
+      const margin = 20
+      const maxWidth = pageWidth - 2 * margin
+      let y = margin
 
-    // Helper to add text with wrapping
-    const addText = (text, fontSize = 10, isBold = false) => {
-      doc.setFontSize(fontSize)
-      doc.setFont(undefined, isBold ? 'bold' : 'normal')
-      const lines = doc.splitTextToSize(text, maxWidth)
+      // Helper to add text with wrapping
+      const addText = (text, fontSize = 10, isBold = false) => {
+        doc.setFontSize(fontSize)
+        doc.setFont(undefined, isBold ? 'bold' : 'normal')
+        const lines = doc.splitTextToSize(text, maxWidth)
+        
+        lines.forEach(line => {
+          if (y + 10 > pageHeight - margin) {
+            doc.addPage()
+            y = margin
+          }
+          doc.text(line, margin, y)
+          y += fontSize / 2 + 2
+        })
+        y += 3
+      }
+
+      // Title
+      addText('ATA DE REUNIÃO', 16, true)
+      y += 5
+
+      // Extract date/time from summary if present
+      if (transcription.summary) {
+        const dateMatch = transcription.summary.match(/Data:\s*(.+)/i)
+        const timeMatch = transcription.summary.match(/Hora:\s*(.+)/i)
+        
+        if (dateMatch) addText(dateMatch[0], 10)
+        if (timeMatch) addText(timeMatch[0], 10)
+      }
       
-      lines.forEach(line => {
-        if (y + 10 > pageHeight - margin) {
-          doc.addPage()
-          y = margin
-        }
-        doc.text(line, margin, y)
-        y += fontSize / 2 + 2
-      })
-      y += 3
+      addText(`Arquivo: ${transcription.filename}`, 10)
+      if (transcription.duration) addText(`Duração: ${formatDuration(transcription.duration)}`, 10)
+      if (transcription.language) addText(`Idioma: ${transcription.language}`, 10)
+      
+      y += 10
+
+      // Summary or transcription
+      if (transcription.summary) {
+        addText(transcription.summary, 10)
+      } else {
+        addText('TRANSCRIÇÃO:', 12, true)
+        y += 3
+        addText(transcription.text, 10)
+      }
+
+      // Save
+      const filename = `ata_${transcription.filename.replace(/\.[^/.]+$/, '')}.pdf`
+      doc.save(filename)
+    } catch (error) {
+      console.error('Error exporting PDF:', error)
+      alert('Erro ao exportar PDF: ' + error.message)
     }
-
-    // Title
-    addText('ATA DE REUNIÃO', 16, true)
-    y += 5
-
-    // Extract date/time from summary if present
-    const dateMatch = transcription.summary.match(/Data:\s*(.+)/i)
-    const timeMatch = transcription.summary.match(/Hora:\s*(.+)/i)
-    
-    if (dateMatch) addText(dateMatch[0], 10)
-    if (timeMatch) addText(timeMatch[0], 10)
-    addText(`Arquivo: ${transcription.filename}`, 10)
-    if (transcription.duration) addText(`Duração: ${formatDuration(transcription.duration)}`, 10)
-    if (transcription.language) addText(`Idioma: ${transcription.language}`, 10)
-    
-    y += 10
-
-    // Summary
-    addText(transcription.summary, 10)
-
-    // Save
-    const filename = `ata_${transcription.filename.replace(/\.[^/.]+$/, '')}.pdf`
-    doc.save(filename)
   }
 
   const exportAsText = (transcription) => {
-    const content = `ATA DE REUNIÃO
-
-${transcription.summary}
+    const summarySection = transcription.summary ? `${transcription.summary}
 
 =====================================
 TRANSCRIÇÃO COMPLETA
 =====================================
 
-${transcription.text}
+` : ''
+    
+    const content = `ATA DE REUNIÃO
+
+${summarySection}${transcription.text}
 
 =====================================
 Informações do Arquivo
@@ -204,15 +227,13 @@ ${transcription.language ? `Idioma: ${transcription.language}` : ''}
   }
 
   const exportAsMarkdown = (transcription) => {
+    const summarySection = transcription.summary 
+      ? `${transcription.summary}\n\n---\n\n## TRANSCRIÇÃO COMPLETA\n\n` 
+      : '## TRANSCRIÇÃO\n\n'
+    
     const content = `# ATA DE REUNIÃO
 
-${transcription.summary}
-
----
-
-## TRANSCRIÇÃO COMPLETA
-
-${transcription.text}
+${summarySection}${transcription.text}
 
 ---
 
@@ -243,6 +264,14 @@ ${transcription.language ? `- **Idioma:** ${transcription.language}` : ''}
 
   const handleExportClick = (event) => {
     setExportMenuAnchor(event.currentTarget)
+  }
+
+  const handleExportMenuOpen = (event) => {
+    setExportMenuAnchor(event.currentTarget)
+  }
+
+  const handleExportMenuClose = () => {
+    setExportMenuAnchor(null)
   }
 
   const handleExportClose = () => {
@@ -668,18 +697,20 @@ ${transcription.language ? `- **Idioma:** ${transcription.language}` : ''}
           }
         }}
       >
-        {selectedTranscription && (
+        {selectedTranscription ? (
           <>
             <DialogTitle sx={{ pb: 2, pt: 3, px: 3 }}>
               <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                 <Box sx={{ flex: 1, mr: 2 }}>
                   <Typography variant="h6" sx={{ color: 'black', fontWeight: 600, mb: 1 }}>
-                    {selectedTranscription.filename}
+                    {selectedTranscription.filename || 'Sem título'}
                   </Typography>
                   <Box sx={{ display: 'flex', gap: 2, alignItems: 'center', flexWrap: 'wrap' }}>
-                    <Typography variant="caption" sx={{ color: '#666' }}>
-                      {formatDate(selectedTranscription.created_at)}
-                    </Typography>
+                    {selectedTranscription.created_at && (
+                      <Typography variant="caption" sx={{ color: '#666' }}>
+                        {formatDate(selectedTranscription.created_at)}
+                      </Typography>
+                    )}
                     {selectedTranscription.duration && (
                       <>
                         <Box sx={{ width: 3, height: 3, borderRadius: '50%', bgcolor: '#ddd' }} />
@@ -856,7 +887,7 @@ ${transcription.language ? `- **Idioma:** ${transcription.language}` : ''}
               </Box>
             </DialogActions>
           </>
-        )}
+        ) : null}
       </Dialog>
     </Box>
   )
