@@ -71,6 +71,12 @@ typings/
 .env.test.local
 .env.production.local
 
+# Extension configuration (contains API URLs)
+extension/config.js
+
+# Dashboard environment
+dashboard/.env
+
 # parcel-bundler cache (https://parceljs.org/)
 .cache
 .parcel-cache
