@@ -272,5 +272,3 @@ Este projeto está sob a licença MIT. Veja o arquivo `LICENSE` para mais detalh
 - **Wiki**: Documentação adicional e tutoriais
 
 ---
-
-**Desenvolvido com ❤️ usando FastAPI, React e OpenAI**
