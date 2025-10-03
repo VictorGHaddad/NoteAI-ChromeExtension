@@ -1,15 +1,28 @@
 # 🎙️ Audio Transcriber
 
+[![Version](https://img.shields.io/badge/version-1.0.0-blue.svg)](https://github.com/VictorGHaddad/audio-transcriber/releases/tag/v1.0.0)
+[![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
+
 Um monorepo completo para transcrição de áudio usando IA, com extensão Chrome, backend FastAPI e dashboard React.
 
 ## 📋 Funcionalidades
 
-- 🎤 **Extensão Chrome**: Grave áudio diretamente do navegador
+### Core
+- 🎤 **Extensão Chrome**: Grave áudio diretamente do navegador (microfone + áudio da aba)
 - 🤖 **IA de Transcrição**: OpenAI Whisper para conversão de áudio em texto
-- 📝 **Resumos Inteligentes**: GPT-4o-mini para geração de resumos
-- 📊 **Dashboard Web**: Interface React moderna para gerenciar transcrições
+- 📝 **Resumos Inteligentes**: GPT-4o-mini para geração de resumos estruturados em formato ATA
+- 📊 **Dashboard Web**: Interface React minimalista (preto e branco)
 - 🐳 **Docker**: Ambiente completo containerizado
 - 🗄️ **PostgreSQL**: Armazenamento persistente de dados
+
+### Dashboard Features (v1.0.0)
+- 📤 **Exportação**: Exporte transcrições em PDF, TXT ou Markdown
+- ✏️ **Edição de Títulos**: Edite o nome das gravações diretamente no modal
+- 📋 **Copiar Resumo**: Copie o texto do resumo com um clique
+- 🏷️ **Sistema de Tags**: Adicione e gerencie tags para organizar suas transcrições
+- 🎨 **Visualização Customizável**: Escolha entre cards compactos, normais ou expandidos
+- 🔤 **Controle de Fonte**: Ajuste o tamanho da fonte para melhor leitura
+- 📅 **Formatação Brasileira**: Datas e horários no formato brasileiro
 
 ## 🏗️ Arquitetura
 
@@ -118,6 +131,7 @@ docker run --name audio-transcriber-db \
 - `POST /api/audio/upload` - Upload e transcrição de áudio
 - `GET /api/audio/transcriptions` - Listar todas as transcrições
 - `GET /api/audio/transcriptions/{id}` - Obter transcrição específica
+- `PATCH /api/audio/transcriptions/{id}` - Atualizar título e tags da transcrição
 - `DELETE /api/audio/transcriptions/{id}` - Deletar transcrição
 - `POST /api/audio/transcriptions/{id}/regenerate-summary` - Regenerar resumo
 
@@ -171,21 +185,27 @@ A extensão suporta:
 
 ### Dashboard Features
 
-- 📊 **Estatísticas**: Total de transcrições, duração, tamanho
-- 🔍 **Pesquisa**: Filtrar transcrições
+- 📊 **Estatísticas**: Total de transcrições, duração total, tamanho total
+- 🔍 **Pesquisa**: Filtrar transcrições por nome
 - 👁️ **Visualização**: Modal detalhado para cada transcrição
-- 🔄 **Atualização**: Regenerar resumos
+- 🔄 **Atualização**: Regenerar resumos usando IA
 - 🗑️ **Gestão**: Deletar transcrições
+- 📤 **Exportação**: Baixe em PDF, TXT ou Markdown
+- ✏️ **Edição**: Edite títulos das gravações
+- 📋 **Clipboard**: Copie resumos com um clique
+- 🏷️ **Tags**: Organize transcrições com tags personalizadas
+- 🎨 **Customização**: Ajuste tamanho dos cards e fonte
 
 ## 🚧 Recursos Futuros
 
-- [ ] **Captura de áudio do sistema** (além do microfone)
 - [ ] **Transcrição em tempo real**
 - [ ] **Suporte a múltiplos idiomas**
-- [ ] **Exportação para PDF/Word**
 - [ ] **Integração com Google Drive/Dropbox**
 - [ ] **API de webhooks**
 - [ ] **Dashboard móvel (PWA)**
+- [ ] **Filtros avançados por tags**
+- [ ] **Estatísticas e analytics**
+- [ ] **Exportação em lote**
 
 ## 🔒 Segurança
 
