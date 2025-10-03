@@ -94,8 +94,22 @@ async function stopRecording() {
     try {
         console.log('Stopping recording');
         
-        if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+        // Check if there's actually a recording to stop
+        if (!mediaRecorder) {
+            console.warn('No active recording to stop');
+            return {
+                size: 0,
+                chunks: 0,
+                warning: 'No active recording'
+            };
+        }
+        
+        // Stop MediaRecorder if it's recording
+        if (mediaRecorder.state !== 'inactive') {
             mediaRecorder.stop();
+            console.log('MediaRecorder stopped');
+        } else {
+            console.warn('MediaRecorder was already inactive');
         }
         
         // Wait for final chunks
@@ -103,14 +117,37 @@ async function stopRecording() {
         
         // Stop audio context
         if (audioContext) {
-            await audioContext.close();
+            try {
+                await audioContext.close();
+                console.log('AudioContext closed');
+            } catch (e) {
+                console.warn('Error closing AudioContext:', e);
+            }
             audioContext = null;
         }
         
         // Stop stream
         if (stream) {
-            stream.getTracks().forEach(track => track.stop());
+            stream.getTracks().forEach(track => {
+                try {
+                    track.stop();
+                } catch (e) {
+                    console.warn('Error stopping track:', e);
+                }
+            });
+            console.log('Stream tracks stopped');
             stream = null;
+        }
+        
+        // Check if we have recorded data
+        if (!recordedChunks || recordedChunks.length === 0) {
+            console.warn('No recorded chunks available');
+            mediaRecorder = null;
+            return {
+                size: 0,
+                chunks: 0,
+                warning: 'No audio data recorded'
+            };
         }
         
         // Create blob
@@ -119,40 +156,39 @@ async function stopRecording() {
         
         // Convert to base64
         const base64Audio = await blobToBase64(blob);
+        console.log('Audio converted to base64, length:', base64Audio.length);
         
-        // Save to storage with error handling
-        try {
-            if (chrome && chrome.storage && chrome.storage.local) {
-                await chrome.storage.local.set({
-                    lastRecording: {
-                        audio: base64Audio,
-                        timestamp: Date.now(),
-                        size: blob.size,
-                        chunks: recordedChunks.length
-                    }
-                });
-                console.log('Recording saved to storage');
-            } else {
-                console.warn('Chrome storage API not available, recording not saved');
-            }
-        } catch (storageError) {
-            console.warn('Failed to save to storage:', storageError);
-            // Continue anyway - we still want to return success
-        }
-        
-        // Reset
+        // Reset state
         const resultSize = blob.size;
         const resultChunks = recordedChunks.length;
         recordedChunks = [];
         mediaRecorder = null;
         
+        // Return the audio data to background script so it can save to storage
         return {
             size: resultSize,
-            chunks: resultChunks
+            chunks: resultChunks,
+            audio: base64Audio,
+            timestamp: Date.now()
         };
         
     } catch (error) {
         console.error('Error in stopRecording:', error);
+        
+        // Clean up even on error
+        if (audioContext) {
+            try { await audioContext.close(); } catch (e) {}
+            audioContext = null;
+        }
+        if (stream) {
+            stream.getTracks().forEach(track => {
+                try { track.stop(); } catch (e) {}
+            });
+            stream = null;
+        }
+        recordedChunks = [];
+        mediaRecorder = null;
+        
         throw error;
     }
 }

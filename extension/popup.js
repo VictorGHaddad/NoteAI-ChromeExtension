@@ -136,30 +136,50 @@ class AudioRecorder {
     async stopRecording() {
         try {
             this.updateStatus('Parando gravação...');
+            this.recordBtn.disabled = true;
             
             // Stop background recording
             const response = await chrome.runtime.sendMessage({
                 action: 'stopBackgroundRecording'
             });
             
+            // Always reset UI state first
+            this.isRecording = false;
+            this.stopTimer();
+            this.recordBtn.disabled = false;
+            
+            // Check response
             if (!response || !response.success) {
+                // If there's a warning (like no active recording), show info instead of error
+                if (response?.warning) {
+                    this.showError(`Aviso: ${response.warning}`);
+                    this.resetRecordingUI();
+                    return;
+                }
                 throw new Error(response?.error || 'Falha ao parar gravação');
             }
             
-            this.isRecording = false;
-            this.stopTimer();
             this.resetRecordingUI();
             
             // Load the saved recording
             await this.loadLastRecording();
             
             const sizeKB = response.size ? (response.size / 1024).toFixed(2) : '0';
-            this.showSuccess(`Gravação concluída! ${sizeKB} KB`);
+            
+            if (response.warning) {
+                this.showError(`Gravação parada. Aviso: ${response.warning}`);
+            } else if (response.size > 0) {
+                this.showSuccess(`Gravação concluída! ${sizeKB} KB`);
+            } else {
+                this.showError('Gravação parada, mas nenhum áudio foi capturado');
+            }
 
         } catch (error) {
             console.error('Error stopping recording:', error);
+            // Always ensure UI is reset
             this.isRecording = false;
             this.stopTimer();
+            this.recordBtn.disabled = false;
             this.resetRecordingUI();
             this.showError(`Erro ao parar gravação: ${error.message}`);
         }

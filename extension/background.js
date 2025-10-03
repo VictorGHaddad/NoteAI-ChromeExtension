@@ -148,7 +148,13 @@ async function handleStopRecording() {
         console.log('Stopping background recording');
         
         if (!recordingState.isRecording) {
-            throw new Error('No recording in progress');
+            console.warn('No recording in progress');
+            return {
+                message: 'No recording in progress',
+                size: 0,
+                chunks: 0,
+                warning: 'No active recording'
+            };
         }
         
         // Send message to offscreen to stop recording
@@ -158,6 +164,22 @@ async function handleStopRecording() {
         
         if (!response || !response.success) {
             throw new Error(response?.error || 'Failed to stop recording');
+        }
+        
+        // Save audio data to storage if we got it
+        if (response.audio && response.size > 0) {
+            console.log('Saving recording to storage, size:', response.size);
+            await chrome.storage.local.set({
+                lastRecording: {
+                    audio: response.audio,
+                    timestamp: response.timestamp || Date.now(),
+                    size: response.size,
+                    chunks: response.chunks
+                }
+            });
+            console.log('Recording saved to storage successfully');
+        } else {
+            console.warn('No audio data received from offscreen document');
         }
         
         // Update state
@@ -173,11 +195,22 @@ async function handleStopRecording() {
         return {
             message: 'Recording stopped',
             size: response.size,
-            chunks: response.chunks
+            chunks: response.chunks,
+            warning: response.warning
         };
         
     } catch (error) {
         console.error('Error stopping recording:', error);
+        
+        // Reset state even on error
+        recordingState.isRecording = false;
+        recordingState.startTime = null;
+        recordingState.tabId = null;
+        
+        await chrome.storage.local.set({
+            recordingState: { isRecording: false }
+        });
+        
         throw error;
     }
 }

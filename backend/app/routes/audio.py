@@ -67,21 +67,29 @@ async def upload_audio(
         transcriber = get_transcriber_service()
         transcription_result = await transcriber.transcribe_audio(file, file.filename)
         
-        # Generate summary
-        summarizer = get_summarizer_service()
-        summary = await summarizer.generate_summary(transcription_result["text"])
-        
-        # Save to database
+        # Save to database first to get created_at timestamp
         db_transcription = Transcription(
             filename=file.filename,
             original_text=transcription_result["text"],
-            summary=summary,
+            summary="",  # Will be updated after generation
             duration=transcription_result.get("duration"),
             file_size=len(file_content),
             language=transcription_result.get("language")
         )
         
         db.add(db_transcription)
+        db.commit()
+        db.refresh(db_transcription)
+        
+        # Generate summary with meeting timestamp
+        summarizer = get_summarizer_service()
+        summary = await summarizer.generate_summary(
+            transcription_result["text"],
+            meeting_datetime=db_transcription.created_at
+        )
+        
+        # Update with generated summary
+        db_transcription.summary = summary
         db.commit()
         db.refresh(db_transcription)
         
@@ -202,9 +210,12 @@ async def regenerate_summary(
         if not transcription:
             raise HTTPException(status_code=404, detail="Transcrição não encontrada")
         
-        # Generate new summary
+        # Generate new summary with original meeting timestamp
         summarizer = get_summarizer_service()
-        new_summary = await summarizer.generate_summary(transcription.original_text)
+        new_summary = await summarizer.generate_summary(
+            transcription.original_text,
+            meeting_datetime=transcription.created_at
+        )
         
         # Update database
         transcription.summary = new_summary
