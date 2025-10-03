@@ -132,8 +132,7 @@ function App() {
     try {
       const response = await axios.patch(
         `${API_BASE_URL}/audio/transcriptions/${selectedTranscription.id}`,
-        null,
-        { params: { filename: editedTitle } }
+        { filename: editedTitle }
       )
       
       setTranscriptions(prev => 
@@ -184,8 +183,7 @@ function App() {
     try {
       const response = await axios.patch(
         `${API_BASE_URL}/audio/transcriptions/${selectedTranscription.id}`,
-        null,
-        { params: { tags: updatedTags } }
+        { tags: updatedTags }
       )
       
       setTranscriptions(prev => 
@@ -208,8 +206,7 @@ function App() {
     try {
       const response = await axios.patch(
         `${API_BASE_URL}/audio/transcriptions/${selectedTranscription.id}`,
-        null,
-        { params: { tags: updatedTags } }
+        { tags: updatedTags }
       )
       
       setTranscriptions(prev => 

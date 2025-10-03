@@ -1,7 +1,8 @@
 import os
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
 from sqlalchemy.orm import Session
-from typing import List
+from typing import List, Optional
+from pydantic import BaseModel
 import mimetypes
 
 from ..database import get_db
@@ -10,6 +11,11 @@ from ..services.transcriber import TranscriberService
 from ..services.summarizer import SummarizerService
 
 router = APIRouter(prefix="/audio", tags=["audio"])
+
+# Pydantic models for request bodies
+class UpdateTranscriptionRequest(BaseModel):
+    filename: Optional[str] = None
+    tags: Optional[List[str]] = None
 
 # Initialize services (will be initialized on first use)
 transcriber_service = None
@@ -164,6 +170,7 @@ async def get_transcription(
             "duration": transcription.duration,
             "language": transcription.language,
             "file_size": transcription.file_size,
+            "tags": transcription.get_tags(),
             "created_at": transcription.created_at,
             "updated_at": transcription.updated_at
         }
@@ -177,8 +184,7 @@ async def get_transcription(
 @router.patch("/transcriptions/{transcription_id}")
 async def update_transcription(
     transcription_id: int,
-    filename: str = None,
-    tags: List[str] = None,
+    update_data: UpdateTranscriptionRequest,
     db: Session = Depends(get_db)
 ):
     """
@@ -191,11 +197,11 @@ async def update_transcription(
             raise HTTPException(status_code=404, detail="Transcrição não encontrada")
         
         # Update fields if provided
-        if filename is not None:
-            transcription.filename = filename
+        if update_data.filename is not None:
+            transcription.filename = update_data.filename
         
-        if tags is not None:
-            transcription.set_tags(tags)
+        if update_data.tags is not None:
+            transcription.set_tags(update_data.tags)
         
         db.commit()
         db.refresh(transcription)
