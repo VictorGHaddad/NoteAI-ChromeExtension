@@ -1,7 +1,8 @@
 import os
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
 from sqlalchemy.orm import Session
-from typing import List
+from typing import List, Optional
+from pydantic import BaseModel
 import mimetypes
 
 from ..database import get_db
@@ -10,6 +11,11 @@ from ..services.transcriber import TranscriberService
 from ..services.summarizer import SummarizerService
 
 router = APIRouter(prefix="/audio", tags=["audio"])
+
+# Pydantic models for request bodies
+class UpdateTranscriptionRequest(BaseModel):
+    filename: Optional[str] = None
+    tags: Optional[List[str]] = None
 
 # Initialize services (will be initialized on first use)
 transcriber_service = None
@@ -130,6 +136,7 @@ async def get_transcriptions(
                     "duration": t.duration,
                     "language": t.language,
                     "file_size": t.file_size,
+                    "tags": t.get_tags(),
                     "created_at": t.created_at,
                     "updated_at": t.updated_at
                 }
@@ -163,6 +170,7 @@ async def get_transcription(
             "duration": transcription.duration,
             "language": transcription.language,
             "file_size": transcription.file_size,
+            "tags": transcription.get_tags(),
             "created_at": transcription.created_at,
             "updated_at": transcription.updated_at
         }
@@ -171,6 +179,50 @@ async def get_transcription(
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Erro ao buscar transcrição: {str(e)}")
+
+
+@router.patch("/transcriptions/{transcription_id}")
+async def update_transcription(
+    transcription_id: int,
+    update_data: UpdateTranscriptionRequest,
+    db: Session = Depends(get_db)
+):
+    """
+    Update transcription filename and/or tags
+    """
+    try:
+        transcription = db.query(Transcription).filter(Transcription.id == transcription_id).first()
+        
+        if not transcription:
+            raise HTTPException(status_code=404, detail="Transcrição não encontrada")
+        
+        # Update fields if provided
+        if update_data.filename is not None:
+            transcription.filename = update_data.filename
+        
+        if update_data.tags is not None:
+            transcription.set_tags(update_data.tags)
+        
+        db.commit()
+        db.refresh(transcription)
+        
+        return {
+            "id": transcription.id,
+            "filename": transcription.filename,
+            "text": transcription.original_text,
+            "summary": transcription.summary,
+            "duration": transcription.duration,
+            "language": transcription.language,
+            "file_size": transcription.file_size,
+            "tags": transcription.get_tags(),
+            "created_at": transcription.created_at.isoformat() if transcription.created_at else None,
+            "updated_at": transcription.updated_at.isoformat() if transcription.updated_at else None
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Erro ao atualizar transcrição: {str(e)}")
 
 @router.delete("/transcriptions/{transcription_id}")
 async def delete_transcription(
