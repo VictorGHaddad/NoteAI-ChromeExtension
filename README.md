@@ -46,6 +46,7 @@ audio-transcriber/
 
 1. **Clone e acesse o projeto:**
    ```bash
+   git clone https://github.com/VictorGHaddad/audio-transcriber.git
    cd audio-transcriber
    ```
 
@@ -55,12 +56,28 @@ audio-transcriber/
    # Edite o arquivo .env e adicione sua OPENAI_API_KEY
    ```
 
-3. **Inicie todos os serviços:**
+3. **Configure a extensão Chrome:**
+   ```bash
+   cd extension
+   cp config.example.js config.js
+   # Edite config.js com a URL do seu backend (padrão: http://localhost:8000/api)
+   ```
+
+4. **Configure o dashboard (opcional):**
+   ```bash
+   cd dashboard
+   cp .env.example .env
+   # Edite .env se seu backend não estiver em localhost:8000
+   ```
+
+> 📖 Para configurações avançadas (servidor remoto, produção, HTTPS), veja [CONFIGURATION.md](CONFIGURATION.md)
+
+5. **Inicie todos os serviços:**
    ```bash
    docker-compose up -d
    ```
 
-4. **Verifique se os serviços estão rodando:**
+6. **Verifique se os serviços estão rodando:**
    - Backend: http://localhost:8000
    - Dashboard: http://localhost:3000
    - Postgres: localhost:5432

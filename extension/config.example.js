@@ -1,4 +1,6 @@
 // Configuração da extensão
+// COPIE este arquivo para config.js e ajuste conforme seu ambiente
+
 const CONFIG = {
     // Para desenvolvimento local
     API_BASE_URL: 'http://localhost:8000/api',

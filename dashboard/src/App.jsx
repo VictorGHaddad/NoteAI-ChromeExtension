@@ -51,7 +51,8 @@ import axios from 'axios'
 import { jsPDF } from 'jspdf'
 import { saveAs } from 'file-saver'
 
-const API_BASE_URL = 'http://10.0.0.111:8000/api'
+// API Base URL - usa variável de ambiente ou fallback para localhost
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api'
 
 function App() {
   const [transcriptions, setTranscriptions] = useState([])
