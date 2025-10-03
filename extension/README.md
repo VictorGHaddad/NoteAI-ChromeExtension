@@ -20,9 +20,11 @@ A extensão agora conta com um design completamente reformulado:
 
 ## 🚀 Instalação
 
-### 1. Copiar arquivos da VM
+### 1. Configurar a extensão
 ```bash
-scp -r ubuntu@10.0.0.111:/home/ubuntu/ccm-internal-transcriber-extension/audio-transcriber/extension ./audio-transcriber-extension
+cd extension
+cp config.example.js config.js
+# Edite config.js com a URL do seu backend
 ```
 
 ### 2. Instalar no Chrome
@@ -55,7 +57,7 @@ scp -r ubuntu@10.0.0.111:/home/ubuntu/ccm-internal-transcriber-extension/audio-t
 
 ### Passo 4: Ver Resultados
 - O resumo aparecerá no popup
-- Acesse o dashboard em `http://10.0.0.111:3000` para ver todas as transcrições
+- Acesse o dashboard em `http://localhost:3000` para ver todas as transcrições (ou a URL configurada)
 
 ## ⚙️ Configuração
 
@@ -63,7 +65,8 @@ scp -r ubuntu@10.0.0.111:/home/ubuntu/ccm-internal-transcriber-extension/audio-t
 Edite o arquivo `config.js`:
 ```javascript
 const CONFIG = {
-    API_BASE_URL: 'http://10.0.0.111:8000/api'  // Altere conforme necessário
+    API_BASE_URL: 'http://localhost:8000/api'  // Para desenvolvimento local
+    // API_BASE_URL: 'http://YOUR_SERVER_IP:8000/api'  // Para servidor remoto
 };
 ```
 
@@ -87,7 +90,7 @@ const CONFIG = {
    - Veja os logs no console
 
 ### Transcrição falha
-- Verifique se o backend está rodando: `http://10.0.0.111:8000/health`
+- Verifique se o backend está rodando: `curl http://localhost:8000/health`
 - Verifique se a API key do OpenAI está configurada
 - Verifique os logs do backend: `docker-compose logs backend`
 
