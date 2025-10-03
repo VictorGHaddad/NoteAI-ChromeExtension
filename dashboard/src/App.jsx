@@ -26,6 +26,8 @@ import {
   Select,
   FormControl,
   InputLabel,
+  TextField,
+  Snackbar,
 } from '@mui/material'
 import {
   Mic,
@@ -39,6 +41,11 @@ import {
   ViewStream,
   ViewCompact,
   TextFields,
+  Edit,
+  ContentCopy,
+  Check,
+  Add,
+  LocalOffer,
 } from '@mui/icons-material'
 import axios from 'axios'
 import { jsPDF } from 'jspdf'
@@ -55,6 +62,14 @@ function App() {
   const [viewMode, setViewMode] = useState(() => localStorage.getItem('viewMode') || 'normal')
   const [fontSize, setFontSize] = useState(() => localStorage.getItem('fontSize') || 'medium')
   const [exportMenuAnchor, setExportMenuAnchor] = useState(null)
+  
+  // New states for editing
+  const [isEditingTitle, setIsEditingTitle] = useState(false)
+  const [editedTitle, setEditedTitle] = useState('')
+  const [snackbarOpen, setSnackbarOpen] = useState(false)
+  const [snackbarMessage, setSnackbarMessage] = useState('')
+  const [newTag, setNewTag] = useState('')
+  const [isAddingTag, setIsAddingTag] = useState(false)
 
   useEffect(() => {
     fetchTranscriptions()
@@ -101,6 +116,114 @@ function App() {
     }
   }
 
+  // Edit title functions
+  const startEditingTitle = () => {
+    setEditedTitle(selectedTranscription.filename)
+    setIsEditingTitle(true)
+  }
+
+  const saveTitle = async () => {
+    if (!editedTitle.trim()) {
+      setSnackbarMessage('O título não pode estar vazio')
+      setSnackbarOpen(true)
+      return
+    }
+
+    try {
+      const response = await axios.patch(
+        `${API_BASE_URL}/audio/transcriptions/${selectedTranscription.id}`,
+        null,
+        { params: { filename: editedTitle } }
+      )
+      
+      setTranscriptions(prev => 
+        prev.map(t => t.id === selectedTranscription.id ? response.data : t)
+      )
+      setSelectedTranscription(response.data)
+      setIsEditingTitle(false)
+      setSnackbarMessage('Título atualizado com sucesso!')
+      setSnackbarOpen(true)
+    } catch (err) {
+      setSnackbarMessage(`Erro ao atualizar título: ${err.message}`)
+      setSnackbarOpen(true)
+    }
+  }
+
+  const cancelEditTitle = () => {
+    setIsEditingTitle(false)
+    setEditedTitle('')
+  }
+
+  // Copy summary function
+  const copySummary = async () => {
+    if (!selectedTranscription?.summary) return
+    
+    try {
+      await navigator.clipboard.writeText(selectedTranscription.summary)
+      setSnackbarMessage('Resumo copiado para a área de transferência!')
+      setSnackbarOpen(true)
+    } catch (err) {
+      setSnackbarMessage('Erro ao copiar resumo')
+      setSnackbarOpen(true)
+    }
+  }
+
+  // Tag management functions
+  const addTag = async () => {
+    if (!newTag.trim()) return
+
+    const currentTags = selectedTranscription.tags || []
+    if (currentTags.includes(newTag.trim())) {
+      setSnackbarMessage('Tag já existe!')
+      setSnackbarOpen(true)
+      return
+    }
+
+    const updatedTags = [...currentTags, newTag.trim()]
+
+    try {
+      const response = await axios.patch(
+        `${API_BASE_URL}/audio/transcriptions/${selectedTranscription.id}`,
+        null,
+        { params: { tags: updatedTags } }
+      )
+      
+      setTranscriptions(prev => 
+        prev.map(t => t.id === selectedTranscription.id ? response.data : t)
+      )
+      setSelectedTranscription(response.data)
+      setNewTag('')
+      setIsAddingTag(false)
+      setSnackbarMessage('Tag adicionada!')
+      setSnackbarOpen(true)
+    } catch (err) {
+      setSnackbarMessage(`Erro ao adicionar tag: ${err.message}`)
+      setSnackbarOpen(true)
+    }
+  }
+
+  const removeTag = async (tagToRemove) => {
+    const updatedTags = (selectedTranscription.tags || []).filter(tag => tag !== tagToRemove)
+
+    try {
+      const response = await axios.patch(
+        `${API_BASE_URL}/audio/transcriptions/${selectedTranscription.id}`,
+        null,
+        { params: { tags: updatedTags } }
+      )
+      
+      setTranscriptions(prev => 
+        prev.map(t => t.id === selectedTranscription.id ? response.data : t)
+      )
+      setSelectedTranscription(response.data)
+      setSnackbarMessage('Tag removida!')
+      setSnackbarOpen(true)
+    } catch (err) {
+      setSnackbarMessage(`Erro ao remover tag: ${err.message}`)
+      setSnackbarOpen(true)
+    }
+  }
+
   const formatDate = (dateString) => {
     const date = new Date(dateString)
     const today = new Date()
@@ -114,6 +237,17 @@ function App() {
     } else {
       return date.toLocaleDateString('pt-BR', { day: '2-digit', month: 'short', year: 'numeric' })
     }
+  }
+
+  const formatDateFull = (dateString) => {
+    const date = new Date(dateString)
+    return date.toLocaleDateString('pt-BR', { 
+      day: '2-digit', 
+      month: '2-digit', 
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    })
   }
 
   const formatDuration = (seconds) => {
@@ -146,50 +280,80 @@ function App() {
       const maxWidth = pageWidth - 2 * margin
       let y = margin
 
+      // Function to remove emojis and clean text
+      const cleanText = (text) => {
+        if (!text) return ''
+        // Remove emojis
+        return text.replace(/[\u{1F300}-\u{1F9FF}]|[\u{2600}-\u{26FF}]|[\u{2700}-\u{27BF}]/gu, '')
+                   .replace(/[📅👥📋💬✅📝]/g, '')
+                   .trim()
+      }
+
       // Helper to add text with wrapping
-      const addText = (text, fontSize = 10, isBold = false) => {
+      const addText = (text, fontSize = 10, isBold = false, indent = 0) => {
+        if (!text) return
+        
+        const cleanedText = cleanText(text)
+        if (!cleanedText) return
+        
         doc.setFontSize(fontSize)
         doc.setFont(undefined, isBold ? 'bold' : 'normal')
-        const lines = doc.splitTextToSize(text, maxWidth)
+        const lines = doc.splitTextToSize(cleanedText, maxWidth - indent)
         
         lines.forEach(line => {
           if (y + 10 > pageHeight - margin) {
             doc.addPage()
             y = margin
           }
-          doc.text(line, margin, y)
+          doc.text(line, margin + indent, y)
           y += fontSize / 2 + 2
         })
-        y += 3
+        y += 2
       }
 
       // Title
-      addText('ATA DE REUNIÃO', 16, true)
+      addText('ATA DE REUNIAO', 18, true)
       y += 5
 
-      // Extract date/time from summary if present
+      // Extract and clean summary sections
       if (transcription.summary) {
-        const dateMatch = transcription.summary.match(/Data:\s*(.+)/i)
-        const timeMatch = transcription.summary.match(/Hora:\s*(.+)/i)
+        const summary = cleanText(transcription.summary)
         
-        if (dateMatch) addText(dateMatch[0], 10)
-        if (timeMatch) addText(timeMatch[0], 10)
-      }
-      
-      addText(`Arquivo: ${transcription.filename}`, 10)
-      if (transcription.duration) addText(`Duração: ${formatDuration(transcription.duration)}`, 10)
-      if (transcription.language) addText(`Idioma: ${transcription.language}`, 10)
-      
-      y += 10
-
-      // Summary or transcription
-      if (transcription.summary) {
-        addText(transcription.summary, 10)
+        // Parse sections
+        const sections = summary.split('\n\n')
+        
+        sections.forEach(section => {
+          if (!section.trim()) return
+          
+          // Check if it's a header (all caps or starts with specific keywords)
+          if (section.match(/^[A-Z\s]+:$/m) || 
+              section.startsWith('Informacoes Basicas') ||
+              section.startsWith('Participantes') ||
+              section.startsWith('Agenda') ||
+              section.startsWith('Discussao') ||
+              section.startsWith('Proximos Passos') ||
+              section.startsWith('Observacoes')) {
+            y += 3
+            addText(section, 11, true)
+          } else {
+            addText(section, 10, false)
+          }
+        })
       } else {
-        addText('TRANSCRIÇÃO:', 12, true)
+        addText('TRANSCRICAO:', 12, true)
         y += 3
         addText(transcription.text, 10)
       }
+
+      // File info
+      y += 10
+      addText('___________________________________', 10)
+      y += 3
+      addText('INFORMACOES DO ARQUIVO', 11, true)
+      addText(`Arquivo: ${transcription.filename}`, 9)
+      addText(`Data: ${formatDateFull(transcription.created_at)}`, 9)
+      if (transcription.duration) addText(`Duracao: ${formatDuration(transcription.duration)}`, 9)
+      if (transcription.language) addText(`Idioma: ${transcription.language}`, 9)
 
       // Save
       const filename = `ata_${transcription.filename.replace(/\.[^/.]+$/, '')}.pdf`
@@ -217,7 +381,7 @@ ${summarySection}${transcription.text}
 Informações do Arquivo
 =====================================
 Arquivo: ${transcription.filename}
-Data: ${formatDate(transcription.created_at)}
+Data: ${formatDateFull(transcription.created_at)}
 ${transcription.duration ? `Duração: ${formatDuration(transcription.duration)}` : ''}
 ${transcription.language ? `Idioma: ${transcription.language}` : ''}
 `
@@ -240,7 +404,7 @@ ${summarySection}${transcription.text}
 ### Informações do Arquivo
 
 - **Arquivo:** ${transcription.filename}
-- **Data:** ${formatDate(transcription.created_at)}
+- **Data:** ${formatDateFull(transcription.created_at)}
 ${transcription.duration ? `- **Duração:** ${formatDuration(transcription.duration)}` : ''}
 ${transcription.language ? `- **Idioma:** ${transcription.language}` : ''}
 `
@@ -702,9 +866,106 @@ ${transcription.language ? `- **Idioma:** ${transcription.language}` : ''}
             <DialogTitle sx={{ pb: 2, pt: 3, px: 3 }}>
               <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                 <Box sx={{ flex: 1, mr: 2 }}>
-                  <Typography variant="h6" sx={{ color: 'black', fontWeight: 600, mb: 1 }}>
-                    {selectedTranscription.filename || 'Sem título'}
-                  </Typography>
+                  {/* Title with edit functionality */}
+                  {isEditingTitle ? (
+                    <Box sx={{ display: 'flex', gap: 1, alignItems: 'center', mb: 1 }}>
+                      <TextField
+                        value={editedTitle}
+                        onChange={(e) => setEditedTitle(e.target.value)}
+                        size="small"
+                        fullWidth
+                        autoFocus
+                        onKeyPress={(e) => {
+                          if (e.key === 'Enter') saveTitle()
+                          if (e.key === 'Escape') cancelEditTitle()
+                        }}
+                        sx={{
+                          '& .MuiOutlinedInput-root': {
+                            fontSize: '1.25rem',
+                            fontWeight: 600,
+                          }
+                        }}
+                      />
+                      <IconButton onClick={saveTitle} size="small" sx={{ color: 'green' }}>
+                        <Check />
+                      </IconButton>
+                      <IconButton onClick={cancelEditTitle} size="small" sx={{ color: '#999' }}>
+                        <Close />
+                      </IconButton>
+                    </Box>
+                  ) : (
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
+                      <Typography variant="h6" sx={{ color: 'black', fontWeight: 600 }}>
+                        {selectedTranscription.filename || 'Sem título'}
+                      </Typography>
+                      <IconButton 
+                        size="small" 
+                        onClick={startEditingTitle}
+                        sx={{ 
+                          color: '#999',
+                          '&:hover': { color: '#000', bgcolor: '#f5f5f5' }
+                        }}
+                      >
+                        <Edit fontSize="small" />
+                      </IconButton>
+                    </Box>
+                  )}
+
+                  {/* Tags */}
+                  <Box sx={{ display: 'flex', gap: 1, alignItems: 'center', flexWrap: 'wrap', mb: 1 }}>
+                    {(selectedTranscription.tags || []).map((tag, index) => (
+                      <Chip
+                        key={index}
+                        label={tag}
+                        size="small"
+                        onDelete={() => removeTag(tag)}
+                        sx={{
+                          bgcolor: '#f0f0f0',
+                          '&:hover': { bgcolor: '#e5e5e5' }
+                        }}
+                      />
+                    ))}
+                    {isAddingTag ? (
+                      <Box sx={{ display: 'flex', gap: 0.5, alignItems: 'center' }}>
+                        <TextField
+                          value={newTag}
+                          onChange={(e) => setNewTag(e.target.value)}
+                          size="small"
+                          placeholder="Nova tag"
+                          autoFocus
+                          onKeyPress={(e) => {
+                            if (e.key === 'Enter') addTag()
+                            if (e.key === 'Escape') { setIsAddingTag(false); setNewTag(''); }
+                          }}
+                          sx={{ width: '120px' }}
+                        />
+                        <IconButton onClick={addTag} size="small" sx={{ color: 'green' }}>
+                          <Check fontSize="small" />
+                        </IconButton>
+                        <IconButton 
+                          onClick={() => { setIsAddingTag(false); setNewTag(''); }} 
+                          size="small" 
+                          sx={{ color: '#999' }}
+                        >
+                          <Close fontSize="small" />
+                        </IconButton>
+                      </Box>
+                    ) : (
+                      <Chip
+                        label="+ Tag"
+                        size="small"
+                        icon={<Add fontSize="small" />}
+                        onClick={() => setIsAddingTag(true)}
+                        sx={{
+                          bgcolor: 'transparent',
+                          border: '1px dashed #ccc',
+                          '&:hover': { bgcolor: '#f5f5f5', borderColor: '#999' }
+                        }}
+                      />
+                    )}
+                  </Box>
+
+                  {/* Metadata */}
                   <Box sx={{ display: 'flex', gap: 2, alignItems: 'center', flexWrap: 'wrap' }}>
                     {selectedTranscription.created_at && (
                       <Typography variant="caption" sx={{ color: '#666' }}>
@@ -794,19 +1055,34 @@ ${transcription.language ? `- **Idioma:** ${transcription.language}` : ''}
                     >
                       RESUMO
                     </Typography>
-                    <Button
-                      size="small"
-                      startIcon={<Replay />}
-                      onClick={() => regenerateSummary(selectedTranscription.id)}
-                      sx={{
-                        color: '#666',
-                        textTransform: 'none',
-                        fontSize: '0.8rem',
-                        '&:hover': { bgcolor: '#f5f5f5' }
-                      }}
-                    >
-                      Regenerar
-                    </Button>
+                    <Box sx={{ display: 'flex', gap: 1 }}>
+                      <Button
+                        size="small"
+                        startIcon={<ContentCopy />}
+                        onClick={copySummary}
+                        sx={{
+                          color: '#666',
+                          textTransform: 'none',
+                          fontSize: '0.8rem',
+                          '&:hover': { bgcolor: '#f5f5f5' }
+                        }}
+                      >
+                        Copiar
+                      </Button>
+                      <Button
+                        size="small"
+                        startIcon={<Replay />}
+                        onClick={() => regenerateSummary(selectedTranscription.id)}
+                        sx={{
+                          color: '#666',
+                          textTransform: 'none',
+                          fontSize: '0.8rem',
+                          '&:hover': { bgcolor: '#f5f5f5' }
+                        }}
+                      >
+                        Regenerar
+                      </Button>
+                    </Box>
                   </Box>
                   <Box 
                     sx={{ 
@@ -889,6 +1165,15 @@ ${transcription.language ? `- **Idioma:** ${transcription.language}` : ''}
           </>
         ) : null}
       </Dialog>
+
+      {/* Snackbar for notifications */}
+      <Snackbar
+        open={snackbarOpen}
+        autoHideDuration={3000}
+        onClose={() => setSnackbarOpen(false)}
+        message={snackbarMessage}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+      />
     </Box>
   )
 }

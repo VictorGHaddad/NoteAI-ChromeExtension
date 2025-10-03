@@ -130,6 +130,7 @@ async def get_transcriptions(
                     "duration": t.duration,
                     "language": t.language,
                     "file_size": t.file_size,
+                    "tags": t.get_tags(),
                     "created_at": t.created_at,
                     "updated_at": t.updated_at
                 }
@@ -171,6 +172,51 @@ async def get_transcription(
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Erro ao buscar transcrição: {str(e)}")
+
+
+@router.patch("/transcriptions/{transcription_id}")
+async def update_transcription(
+    transcription_id: int,
+    filename: str = None,
+    tags: List[str] = None,
+    db: Session = Depends(get_db)
+):
+    """
+    Update transcription filename and/or tags
+    """
+    try:
+        transcription = db.query(Transcription).filter(Transcription.id == transcription_id).first()
+        
+        if not transcription:
+            raise HTTPException(status_code=404, detail="Transcrição não encontrada")
+        
+        # Update fields if provided
+        if filename is not None:
+            transcription.filename = filename
+        
+        if tags is not None:
+            transcription.set_tags(tags)
+        
+        db.commit()
+        db.refresh(transcription)
+        
+        return {
+            "id": transcription.id,
+            "filename": transcription.filename,
+            "text": transcription.original_text,
+            "summary": transcription.summary,
+            "duration": transcription.duration,
+            "language": transcription.language,
+            "file_size": transcription.file_size,
+            "tags": transcription.get_tags(),
+            "created_at": transcription.created_at.isoformat() if transcription.created_at else None,
+            "updated_at": transcription.updated_at.isoformat() if transcription.updated_at else None
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Erro ao atualizar transcrição: {str(e)}")
 
 @router.delete("/transcriptions/{transcription_id}")
 async def delete_transcription(

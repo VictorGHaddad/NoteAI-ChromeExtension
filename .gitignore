@@ -162,3 +162,8 @@ temp_audio_*
 # Backup files
 backup.sql
 *.bak
+
+
+#audio zips
+audio-transcriber-extension-fixed.zip
+audio-transcriber-extension-v2.zip
