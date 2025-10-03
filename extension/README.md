@@ -1,7 +1,15 @@
 # Audio Transcriber Extension
 
-## 📋 Descrição
-Extensão Chrome para gravar áudio de reuniões online e transcrever automaticamente usando IA (OpenAI Whisper + GPT-4o-mini).
+> Design minimalista inspirado na OpenAI - v2.1.0
+
+## 🎨 Design Minimalista
+
+A extensão agora conta com um design completamente reformulado:
+- ⚪ **Cores neutras**: Branco e preto como base
+- 🎯 **Interface limpa**: Sem gradientes ou efeitos excessivos
+- ✨ **Tipografia moderna**: Sans-serif clean
+- 📐 **Espaçamentos generosos**: Melhor legibilidade
+- 🖱️ **Interações sutis**: Hover states discretos
 
 ## 🎯 Funcionalidades
 - ✅ Captura áudio da aba ativa (reuniões, vídeos, etc.)

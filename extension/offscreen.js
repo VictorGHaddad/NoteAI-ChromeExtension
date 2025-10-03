@@ -120,25 +120,35 @@ async function stopRecording() {
         // Convert to base64
         const base64Audio = await blobToBase64(blob);
         
-        // Save to storage
-        await chrome.storage.local.set({
-            lastRecording: {
-                audio: base64Audio,
-                timestamp: Date.now(),
-                size: blob.size,
-                chunks: recordedChunks.length
+        // Save to storage with error handling
+        try {
+            if (chrome && chrome.storage && chrome.storage.local) {
+                await chrome.storage.local.set({
+                    lastRecording: {
+                        audio: base64Audio,
+                        timestamp: Date.now(),
+                        size: blob.size,
+                        chunks: recordedChunks.length
+                    }
+                });
+                console.log('Recording saved to storage');
+            } else {
+                console.warn('Chrome storage API not available, recording not saved');
             }
-        });
-        
-        console.log('Recording saved to storage');
+        } catch (storageError) {
+            console.warn('Failed to save to storage:', storageError);
+            // Continue anyway - we still want to return success
+        }
         
         // Reset
+        const resultSize = blob.size;
+        const resultChunks = recordedChunks.length;
         recordedChunks = [];
         mediaRecorder = null;
         
         return {
-            size: blob.size,
-            chunks: recordedChunks.length
+            size: resultSize,
+            chunks: resultChunks
         };
         
     } catch (error) {

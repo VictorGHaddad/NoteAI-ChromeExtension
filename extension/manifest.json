@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "Audio Transcriber",
-  "version": "2.0.0",
-  "description": "Extensão para gravar áudio e transcrever usando IA",
+  "version": "2.1.0",
+  "description": "Transcrição automática de áudio com IA - Design minimalista",
   "permissions": [
     "activeTab",
     "storage",

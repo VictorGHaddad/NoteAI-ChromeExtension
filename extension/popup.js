@@ -43,6 +43,13 @@ class AudioRecorder {
 
     async checkRecordingState() {
         try {
+            // Check if chrome runtime is available
+            if (!chrome || !chrome.runtime || !chrome.runtime.sendMessage) {
+                console.warn('Chrome runtime API not available');
+                this.updateStatus('🎙️ Pronto para gravar áudio da aba\n\n💡 A gravação capturará o áudio da reunião/página\n✅ Grava em background\n✅ Áudio continua tocando normalmente');
+                return;
+            }
+            
             // Check if there's a recording in progress
             const response = await chrome.runtime.sendMessage({ action: 'getRecordingState' });
             
@@ -57,10 +64,12 @@ class AudioRecorder {
             }
             
             // Check if there's a saved recording
-            const storage = await chrome.storage.local.get(['lastRecording']);
-            if (storage.lastRecording && !this.isRecording) {
-                this.showSuccess('Há uma gravação salva! Clique em "Carregar Gravação" para transcrever.');
-                await this.loadLastRecording();
+            if (chrome.storage && chrome.storage.local) {
+                const storage = await chrome.storage.local.get(['lastRecording']);
+                if (storage.lastRecording && !this.isRecording) {
+                    this.showSuccess('Há uma gravação salva! Clique em "Carregar Gravação" para transcrever.');
+                    await this.loadLastRecording();
+                }
             }
         } catch (error) {
             console.log('Error checking recording state:', error);
@@ -144,21 +153,30 @@ class AudioRecorder {
             // Load the saved recording
             await this.loadLastRecording();
             
-            const sizeKB = (response.size / 1024).toFixed(2);
+            const sizeKB = response.size ? (response.size / 1024).toFixed(2) : '0';
             this.showSuccess(`Gravação concluída! ${sizeKB} KB`);
 
         } catch (error) {
             console.error('Error stopping recording:', error);
-            this.showError(`Erro ao parar gravação: ${error.message}`);
+            this.isRecording = false;
+            this.stopTimer();
             this.resetRecordingUI();
+            this.showError(`Erro ao parar gravação: ${error.message}`);
         }
     }
 
     async loadLastRecording() {
         try {
+            // Check if chrome.storage is available
+            if (!chrome || !chrome.storage || !chrome.storage.local) {
+                console.warn('Chrome storage API not available');
+                return;
+            }
+            
             const storage = await chrome.storage.local.get(['lastRecording']);
             
             if (!storage.lastRecording || !storage.lastRecording.audio) {
+                console.log('No recording found in storage');
                 return;
             }
             
@@ -182,6 +200,7 @@ class AudioRecorder {
 
         } catch (error) {
             console.error('Error loading recording:', error);
+            // Don't show error to user, just log it
         }
     }
 
@@ -257,14 +276,14 @@ class AudioRecorder {
 
     updateRecordingUI() {
         this.recordBtn.className = 'record-button stop';
-        this.recordIcon.textContent = '⏹️';
+        this.recordIcon.textContent = '⏹';
         this.recordText.textContent = 'Parar Gravação';
         this.recordingIndicator.classList.remove('hidden');
     }
 
     resetRecordingUI() {
         this.recordBtn.className = 'record-button start';
-        this.recordIcon.textContent = '🎤';
+        this.recordIcon.textContent = '⚫';
         this.recordText.textContent = 'Iniciar Gravação';
         this.recordingIndicator.classList.add('hidden');
     }
