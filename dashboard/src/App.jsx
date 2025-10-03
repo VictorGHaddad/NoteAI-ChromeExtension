@@ -688,12 +688,12 @@ ${transcription.language ? `- **Idioma:** ${transcription.language}` : ''}
       <Dialog
         open={dialogOpen}
         onClose={() => setDialogOpen(false)}
-        maxWidth="md"
+        maxWidth="lg"
         fullWidth
         PaperProps={{
           sx: { 
             borderRadius: '16px',
-            maxHeight: '90vh',
+            maxHeight: '95vh',
           }
         }}
       >
@@ -759,7 +759,7 @@ ${transcription.language ? `- **Idioma:** ${transcription.language}` : ''}
                 </Typography>
                 <Box 
                   sx={{ 
-                    maxHeight: '200px',
+                    maxHeight: '300px',
                     overflowY: 'auto',
                     p: 2,
                     bgcolor: '#fafafa',
@@ -810,7 +810,7 @@ ${transcription.language ? `- **Idioma:** ${transcription.language}` : ''}
                   </Box>
                   <Box 
                     sx={{ 
-                      maxHeight: '150px',
+                      maxHeight: '500px',
                       overflowY: 'auto',
                       p: 2,
                       bgcolor: '#fafafa',
