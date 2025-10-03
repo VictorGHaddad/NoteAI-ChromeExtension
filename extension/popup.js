@@ -328,10 +328,16 @@ class AudioRecorder {
     }
 
     updateRecordingUI() {
+        console.log('🎨 Updating UI to recording state');
+        console.log('recordBtn:', this.recordBtn);
+        console.log('recordingIndicator:', this.recordingIndicator);
+        
         this.recordBtn.className = 'record-button stop';
         this.recordIcon.textContent = '⏹';
         this.recordText.textContent = 'Parar Gravação';
         this.recordingIndicator.classList.remove('hidden');
+        
+        console.log('✅ UI updated - button should be red, indicator visible');
     }
 
     resetRecordingUI() {

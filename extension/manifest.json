@@ -12,7 +12,12 @@
   "host_permissions": [
     "http://localhost:8000/*",
     "http://10.0.0.111:8000/*",
-    "https://api.openai.com/*"
+    "https://api.openai.com/*",
+    "<all_urls>"
+  ],
+  "optional_host_permissions": [
+    "https://*/*",
+    "http://*/*"
   ],
   "background": {
     "service_worker": "background.js"

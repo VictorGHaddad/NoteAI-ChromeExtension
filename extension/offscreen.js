@@ -166,17 +166,52 @@ async function stopRecording() {
             audioElement = null;
         }
         
-        // Stop stream
-        if (stream) {
-            stream.getTracks().forEach(track => {
+        // Close audio context
+        if (audioContext) {
+            try {
+                await audioContext.close();
+                console.log('AudioContext closed');
+            } catch (e) {
+                console.warn('Error closing AudioContext:', e);
+            }
+            audioContext = null;
+        }
+        
+        // Stop all streams
+        if (tabStream) {
+            tabStream.getTracks().forEach(track => {
                 try {
                     track.stop();
                 } catch (e) {
-                    console.warn('Error stopping track:', e);
+                    console.warn('Error stopping tab track:', e);
                 }
             });
-            console.log('Stream tracks stopped');
-            stream = null;
+            console.log('Tab stream stopped');
+            tabStream = null;
+        }
+        
+        if (micStream) {
+            micStream.getTracks().forEach(track => {
+                try {
+                    track.stop();
+                } catch (e) {
+                    console.warn('Error stopping mic track:', e);
+                }
+            });
+            console.log('Mic stream stopped');
+            micStream = null;
+        }
+        
+        if (mixedStream) {
+            mixedStream.getTracks().forEach(track => {
+                try {
+                    track.stop();
+                } catch (e) {
+                    console.warn('Error stopping mixed track:', e);
+                }
+            });
+            console.log('Mixed stream stopped');
+            mixedStream = null;
         }
         
         // Check if we have recorded data
@@ -223,11 +258,27 @@ async function stopRecording() {
             } catch (e) {}
             audioElement = null;
         }
-        if (stream) {
-            stream.getTracks().forEach(track => {
+        if (audioContext) {
+            try { await audioContext.close(); } catch (e) {}
+            audioContext = null;
+        }
+        if (tabStream) {
+            tabStream.getTracks().forEach(track => {
                 try { track.stop(); } catch (e) {}
             });
-            stream = null;
+            tabStream = null;
+        }
+        if (micStream) {
+            micStream.getTracks().forEach(track => {
+                try { track.stop(); } catch (e) {}
+            });
+            micStream = null;
+        }
+        if (mixedStream) {
+            mixedStream.getTracks().forEach(track => {
+                try { track.stop(); } catch (e) {}
+            });
+            mixedStream = null;
         }
         recordedChunks = [];
         mediaRecorder = null;
