@@ -1,17 +1,23 @@
 {
   "manifest_version": 3,
   "name": "Audio Transcriber",
-  "version": "1.0.0",
-  "description": "Extensão para gravar áudio e transcrever usando IA",
+  "version": "2.1.0",
+  "description": "Transcrição automática de áudio com IA - Design minimalista",
   "permissions": [
     "activeTab",
     "storage",
-    "tabCapture"
+    "tabCapture",
+    "offscreen"
   ],
   "host_permissions": [
     "http://localhost:8000/*",
     "http://10.0.0.111:8000/*",
-    "https://api.openai.com/*"
+    "https://api.openai.com/*",
+    "<all_urls>"
+  ],
+  "optional_host_permissions": [
+    "https://*/*",
+    "http://*/*"
   ],
   "background": {
     "service_worker": "background.js"

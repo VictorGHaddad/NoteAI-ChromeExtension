@@ -5,174 +5,224 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Audio Transcriber</title>
     <style>
-        body {
-            width: 350px;
-            min-height: 400px;
-            padding: 20px;
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        * {
             margin: 0;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            width: 380px;
+            min-height: 500px;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #ffffff;
+            color: #171717;
         }
 
         .header {
-            text-align: center;
-            margin-bottom: 20px;
+            padding: 20px;
+            border-bottom: 1px solid #e5e5e5;
+            background: #ffffff;
+        }
+
+        .logo {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 8px;
+        }
+
+        .logo-icon {
+            width: 32px;
+            height: 32px;
+            background: #000000;
+            border-radius: 6px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 18px;
         }
 
         .header h1 {
-            margin: 0;
-            font-size: 20px;
+            font-size: 16px;
             font-weight: 600;
+            color: #171717;
         }
 
         .header p {
-            margin: 5px 0 0 0;
-            opacity: 0.8;
-            font-size: 12px;
+            font-size: 13px;
+            color: #737373;
+            margin-top: 4px;
         }
 
-        .recording-controls {
-            background: rgba(255, 255, 255, 0.1);
-            border-radius: 12px;
+        .content {
             padding: 20px;
-            margin-bottom: 20px;
-            backdrop-filter: blur(10px);
+        }
+
+        .recording-section {
+            margin-bottom: 24px;
         }
 
         .record-button {
             width: 100%;
-            height: 50px;
-            border: none;
-            border-radius: 25px;
-            font-size: 16px;
-            font-weight: 600;
+            height: 48px;
+            border: 1px solid #e5e5e5;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 500;
             cursor: pointer;
-            transition: all 0.3s ease;
+            transition: all 0.2s ease;
             display: flex;
             align-items: center;
             justify-content: center;
-            gap: 10px;
+            gap: 8px;
+            background: #ffffff;
+            color: #171717;
+        }
+
+        .record-button:hover {
+            background: #fafafa;
+            border-color: #d4d4d4;
         }
 
         .record-button.start {
-            background: #4CAF50;
-            color: white;
+            background: #000000;
+            color: #ffffff;
+            border-color: #000000;
         }
 
         .record-button.start:hover {
-            background: #45a049;
-            transform: translateY(-2px);
+            background: #171717;
         }
 
         .record-button.stop {
-            background: #f44336;
-            color: white;
-            animation: pulse 1.5s infinite;
+            background: #dc2626;
+            color: #ffffff;
+            border-color: #dc2626;
         }
 
         .record-button.stop:hover {
-            background: #da190b;
+            background: #b91c1c;
         }
 
         .record-button:disabled {
-            background: #666;
+            opacity: 0.5;
             cursor: not-allowed;
-            transform: none;
-        }
-
-        @keyframes pulse {
-            0% { box-shadow: 0 0 0 0 rgba(244, 67, 54, 0.7); }
-            70% { box-shadow: 0 0 0 10px rgba(244, 67, 54, 0); }
-            100% { box-shadow: 0 0 0 0 rgba(244, 67, 54, 0); }
         }
 
         .timer {
             text-align: center;
-            font-size: 18px;
+            font-size: 24px;
             font-weight: 600;
-            margin: 10px 0;
-            min-height: 24px;
+            color: #171717;
+            margin: 16px 0;
+            min-height: 32px;
+            font-variant-numeric: tabular-nums;
         }
 
-        .status {
-            background: rgba(255, 255, 255, 0.1);
+        .status-box {
+            background: #fafafa;
+            border: 1px solid #e5e5e5;
             border-radius: 8px;
-            padding: 15px;
-            margin-bottom: 15px;
-            backdrop-filter: blur(10px);
+            padding: 16px;
+            margin-bottom: 16px;
         }
 
-        .status h3 {
-            margin: 0 0 10px 0;
-            font-size: 14px;
-            opacity: 0.8;
+        .status-box.hidden {
+            display: none;
+        }
+
+        .status-title {
+            font-size: 11px;
+            font-weight: 600;
+            color: #737373;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 8px;
         }
 
         .status-content {
-            font-size: 12px;
-            line-height: 1.4;
+            font-size: 13px;
+            color: #525252;
+            line-height: 1.6;
+            white-space: pre-line;
         }
 
         .progress-bar {
             width: 100%;
-            height: 4px;
-            background: rgba(255, 255, 255, 0.2);
-            border-radius: 2px;
+            height: 2px;
+            background: #f5f5f5;
+            border-radius: 1px;
             overflow: hidden;
-            margin: 10px 0;
+            margin: 12px 0;
+        }
+
+        .progress-bar.hidden {
+            display: none;
         }
 
         .progress-fill {
             height: 100%;
-            background: #4CAF50;
-            border-radius: 2px;
+            background: #000000;
+            border-radius: 1px;
             transition: width 0.3s ease;
             width: 0%;
         }
 
         .audio-preview {
-            margin: 15px 0;
+            margin: 16px 0;
+        }
+
+        .audio-preview.hidden {
+            display: none;
         }
 
         .audio-preview audio {
             width: 100%;
-            height: 35px;
+            height: 40px;
+            border-radius: 8px;
+        }
+
+        audio::-webkit-media-controls-panel {
+            background-color: #fafafa;
         }
 
         .actions {
             display: flex;
-            gap: 10px;
-            margin-top: 15px;
+            gap: 8px;
+            margin-top: 16px;
+        }
+
+        .actions.hidden {
+            display: none;
         }
 
         .btn {
             flex: 1;
-            padding: 10px;
-            border: none;
-            border-radius: 6px;
-            font-size: 12px;
-            font-weight: 600;
+            padding: 12px;
+            border: 1px solid #e5e5e5;
+            border-radius: 8px;
+            font-size: 13px;
+            font-weight: 500;
             cursor: pointer;
             transition: all 0.2s ease;
+            background: #ffffff;
+            color: #171717;
         }
 
         .btn-primary {
-            background: #2196F3;
-            color: white;
+            background: #000000;
+            color: #ffffff;
+            border-color: #000000;
         }
 
         .btn-primary:hover {
-            background: #1976D2;
-        }
-
-        .btn-secondary {
-            background: rgba(255, 255, 255, 0.2);
-            color: white;
+            background: #171717;
         }
 
         .btn-secondary:hover {
-            background: rgba(255, 255, 255, 0.3);
+            background: #fafafa;
+            border-color: #d4d4d4;
         }
 
         .btn:disabled {
@@ -180,54 +230,112 @@
             cursor: not-allowed;
         }
 
-        .error {
-            background: rgba(244, 67, 54, 0.2);
-            border: 1px solid rgba(244, 67, 54, 0.3);
-            color: #ffcdd2;
-            padding: 10px;
-            border-radius: 6px;
+        .message {
+            padding: 12px;
+            border-radius: 8px;
             font-size: 12px;
-            margin: 10px 0;
+            line-height: 1.5;
+            margin: 8px 0;
+            white-space: pre-line;
+        }
+
+        .error {
+            background: #fef2f2;
+            border: 1px solid #fecaca;
+            color: #991b1b;
         }
 
         .success {
-            background: rgba(76, 175, 80, 0.2);
-            border: 1px solid rgba(76, 175, 80, 0.3);
-            color: #c8e6c9;
-            padding: 10px;
-            border-radius: 6px;
-            font-size: 12px;
-            margin: 10px 0;
+            background: #f0fdf4;
+            border: 1px solid #bbf7d0;
+            color: #166534;
         }
 
-        .hidden {
-            display: none;
-        }
-
-        .help-text {
-            background: rgba(255, 255, 255, 0.1);
+        .help-box {
+            background: #fafafa;
+            border: 1px solid #e5e5e5;
             border-radius: 8px;
-            padding: 10px;
-            margin: 10px 0;
+            padding: 12px;
+            margin-top: 16px;
+        }
+
+        .help-box-title {
             font-size: 11px;
-            line-height: 1.4;
-            backdrop-filter: blur(10px);
+            font-weight: 600;
+            color: #171717;
+            margin-bottom: 8px;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .help-box-content {
+            font-size: 12px;
+            color: #525252;
+            line-height: 1.6;
+        }
+
+        .help-box-content ul {
+            list-style: none;
+            padding: 0;
+        }
+
+        .help-box-content li {
+            padding: 4px 0;
+            display: flex;
+            align-items: flex-start;
+            gap: 8px;
+        }
+
+        .help-box-content li::before {
+            content: "•";
+            color: #a3a3a3;
+            font-weight: bold;
+            margin-top: 2px;
         }
 
         .recording-indicator {
             position: absolute;
-            top: 10px;
-            right: 10px;
-            width: 12px;
-            height: 12px;
-            background: #f44336;
+            top: 16px;
+            right: 16px;
+            width: 8px;
+            height: 8px;
+            background: #dc2626;
             border-radius: 50%;
-            animation: blink 1s infinite;
+            animation: pulse 2s infinite;
         }
 
-        @keyframes blink {
-            0%, 50% { opacity: 1; }
-            51%, 100% { opacity: 0.3; }
+        .recording-indicator.hidden {
+            display: none;
+        }
+
+        @keyframes pulse {
+            0%, 100% { 
+                opacity: 1;
+                transform: scale(1);
+            }
+            50% { 
+                opacity: 0.5;
+                transform: scale(0.95);
+            }
+        }
+
+        /* Custom scrollbar */
+        ::-webkit-scrollbar {
+            width: 6px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: #fafafa;
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: #d4d4d4;
+            border-radius: 3px;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: #a3a3a3;
         }
     </style>
 </head>
@@ -235,42 +343,57 @@
     <div class="recording-indicator hidden" id="recordingIndicator"></div>
     
     <div class="header">
-        <h1>🎙️ Audio Transcriber</h1>
-        <p>Grave e transcreva áudio com IA</p>
-    </div>
-
-    <div class="recording-controls">
-        <button class="record-button start" id="recordBtn">
-            <span id="recordIcon">🎤</span>
-            <span id="recordText">Iniciar Gravação</span>
-        </button>
-        
-        <div class="timer" id="timer"></div>
-        
-        <div class="progress-bar hidden" id="progressBar">
-            <div class="progress-fill" id="progressFill"></div>
-        </div>
-        
-        <div class="help-text">
-            💡 <strong>Dica:</strong> Se aparecer erro de permissão, clique no ícone 🔒 na barra de endereços e permita o acesso ao microfone.
+        <div class="logo">
+            <div class="logo-icon">🎙️</div>
+            <div>
+                <h1>Audio Transcriber</h1>
+                <p>Transcrição automática com IA</p>
+            </div>
         </div>
     </div>
 
-    <div class="audio-preview hidden" id="audioPreview">
-        <audio controls id="audioPlayer"></audio>
-    </div>
+    <div class="content">
+        <div class="recording-section">
+            <button class="record-button start" id="recordBtn">
+                <span id="recordIcon">⚫</span>
+                <span id="recordText">Iniciar Gravação</span>
+            </button>
+            
+            <div class="timer" id="timer"></div>
+            
+            <div class="progress-bar hidden" id="progressBar">
+                <div class="progress-fill" id="progressFill"></div>
+            </div>
+        </div>
 
-    <div class="status hidden" id="status">
-        <h3 id="statusTitle">Status</h3>
-        <div class="status-content" id="statusContent"></div>
-    </div>
+        <div class="audio-preview hidden" id="audioPreview">
+            <audio controls id="audioPlayer"></audio>
+        </div>
 
-    <div class="actions hidden" id="actions">
-        <button class="btn btn-primary" id="uploadBtn">📤 Transcrever</button>
-        <button class="btn btn-secondary" id="clearBtn">🗑️ Limpar</button>
-    </div>
+        <div class="status-box hidden" id="status">
+            <div class="status-title" id="statusTitle">Status</div>
+            <div class="status-content" id="statusContent"></div>
+        </div>
 
-    <div id="messages"></div>
+        <div class="actions hidden" id="actions">
+            <button class="btn btn-primary" id="uploadBtn">Transcrever</button>
+            <button class="btn btn-secondary" id="clearBtn">Limpar</button>
+        </div>
+
+        <div class="help-box">
+            <div class="help-box-title">💡 Como usar</div>
+            <div class="help-box-content">
+                <ul>
+                    <li>Abra uma reunião ou vídeo com áudio</li>
+                    <li>Clique em "Iniciar Gravação"</li>
+                    <li>Pode fechar o popup - grava em background</li>
+                    <li>Reabra e clique em "Parar" quando terminar</li>
+                </ul>
+            </div>
+        </div>
+
+        <div id="messages"></div>
+    </div>
 
     <script src="config.js"></script>
     <script src="popup.js"></script>
