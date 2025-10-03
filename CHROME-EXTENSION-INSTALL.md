@@ -43,7 +43,7 @@ Antes de instalar, configure a URL da API:
 ### Criar o ZIP:
 ```bash
 cd audio-transcriber
-zip -r audio-transcriber-extension.zip extension/
+zip -r NoteAI-ChromeExtension.zip extension/
 ```
 
 ### Instalar:
@@ -58,7 +58,7 @@ Se o backend está em um servidor remoto:
 
 ```bash
 # Download via SCP
-scp -r user@YOUR_SERVER_IP:/path/to/extension ./audio-transcriber-extension
+scp -r user@YOUR_SERVER_IP:/path/to/extension ./NoteAI-ChromeExtension
 
 # Ou criar um servidor HTTP temporário no servidor:
 # No servidor:
