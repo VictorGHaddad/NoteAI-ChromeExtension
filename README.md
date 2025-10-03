@@ -46,7 +46,7 @@ audio-transcriber/
 
 1. **Clone e acesse o projeto:**
    ```bash
-   git clone https://github.com/VictorGHaddad/NoteAI-ChromeExtension.git.git
+   git clone https://github.com/VictorGHaddad/NoteAI-ChromeExtension.git
    cd NoteAI-ChromeExtension
    ```
 
