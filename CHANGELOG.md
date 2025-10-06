@@ -5,6 +5,38 @@ Todas as mudanças notáveis neste projeto serão documentadas neste arquivo.
 O formato é baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/),
 e este projeto adere ao [Semantic Versioning](https://semver.org/lang/pt-BR/).
 
+## [1.0.2] - 2025-10-06
+
+### 🐛 Corrigido
+- **"Bytes quota exceeded"**: Erro ao gravar reuniões de 12+ minutos
+- **Limite de áudio muito baixo**: Backend tinha limite de 25MB (apenas ~15 minutos)
+- **Chrome storage limitado**: Extensão sem permissão `unlimitedStorage`
+
+### ✨ Adicionado
+- **Suporte a reuniões longas**: Agora suporta até 2 horas por padrão (200MB)
+- **Configuração flexível**: `MAX_AUDIO_SIZE_MB` configurável via `.env`
+- **Documentação completa**: Novo arquivo `AUDIO-LIMITS.md` com guia detalhado
+- **Storage ilimitado**: Extensão Chrome com permissão `unlimitedStorage`
+
+### 🔧 Alterado
+- `MAX_AUDIO_SIZE_MB` aumentado de 25MB para 200MB (padrão)
+- Docker Compose agora passa variável `MAX_AUDIO_SIZE_MB` para o backend
+- `.env.example` atualizado com seção de configuração de áudio
+
+### 📝 Documentação
+- Criado `AUDIO-LIMITS.md` com:
+  - Tabela de tamanhos por duração de reunião
+  - Guia de configuração para reuniões longas
+  - Troubleshooting de erros de quota
+  - Estimativa de custos OpenAI por duração
+
+### 💰 Capacidades
+- ✅ Reuniões de 2 horas (~120-240MB) - Padrão
+- ✅ Reuniões de 4 horas (~240-480MB) - Configurável até 600MB
+- ✅ Divisão automática em chunks para API Whisper (limite 25MB)
+
+---
+
 ## [1.0.1] - 2025-10-03
 
 ### 🐛 Corrigido
