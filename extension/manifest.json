@@ -16,10 +16,6 @@
     "https://api.openai.com/*",
     "<all_urls>"
   ],
-  "optional_host_permissions": [
-    "https://*/*",
-    "http://*/*"
-  ],
   "background": {
     "service_worker": "background.js"
   },
