@@ -1,6 +1,6 @@
 # 🎙️ NoteAI - Chrome Extension
 
-[![Version](https://img.shields.io/badge/version-1.0.3-blue.svg)](https://github.com/VictorGHaddad/NoteAI-ChromeExtension/releases/tag/v1.0.3)
+[![Version](https://img.shields.io/badge/version-1.0.4-blue.svg)](https://github.com/VictorGHaddad/NoteAI-ChromeExtension/releases/tag/v1.0.4)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 
 Um monorepo completo para transcrição de áudio usando IA, com extensão Chrome, backend FastAPI e dashboard React.
@@ -14,6 +14,12 @@ Um monorepo completo para transcrição de áudio usando IA, com extensão Chrom
 - 📊 **Dashboard Web**: Interface React minimalista (preto e branco)
 - 🐳 **Docker**: Ambiente completo containerizado
 - 🗄️ **PostgreSQL**: Armazenamento persistente de dados
+
+### Extension Features (v1.0.4)
+- 💾 **Exportação de Áudio**: Baixe o arquivo de áudio original (.webm) antes de transcrever
+- 🎙️ **Gravação em Background**: Continue navegando enquanto grava
+- 📏 **Suporte a Reuniões Longas**: Até 2 horas de gravação (200MB)
+- 🔄 **Auto-save**: Gravações salvas automaticamente no storage do Chrome
 
 ### Dashboard Features (v1.0.0)
 - 📤 **Exportação**: Exporte transcrições em PDF, TXT ou Markdown

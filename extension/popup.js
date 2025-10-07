@@ -27,6 +27,7 @@ class AudioRecorder {
         this.statusContent = document.getElementById('statusContent');
         this.actions = document.getElementById('actions');
         this.uploadBtn = document.getElementById('uploadBtn');
+        this.downloadBtn = document.getElementById('downloadBtn');
         this.clearBtn = document.getElementById('clearBtn');
         this.messages = document.getElementById('messages');
         this.recordingIndicator = document.getElementById('recordingIndicator');
@@ -38,6 +39,7 @@ class AudioRecorder {
     attachEventListeners() {
         this.recordBtn.addEventListener('click', () => this.toggleRecording());
         this.uploadBtn.addEventListener('click', () => this.uploadAudio());
+        this.downloadBtn.addEventListener('click', () => this.downloadAudio());
         this.clearBtn.addEventListener('click', () => this.clearRecording());
     }
 
@@ -345,6 +347,56 @@ class AudioRecorder {
         } finally {
             this.uploadBtn.disabled = false;
             this.hideProgress();
+        }
+    }
+
+    downloadAudio() {
+        console.log('💾 downloadAudio called');
+        
+        if (!this.recordedBlob) {
+            console.error('❌ No recorded blob available for download!');
+            this.showError('Nenhum áudio para exportar. Grave um áudio primeiro.');
+            return;
+        }
+
+        try {
+            console.log('📦 Blob size:', this.recordedBlob.size, 'bytes');
+            console.log('📦 Blob type:', this.recordedBlob.type);
+            
+            // Create download URL
+            const url = URL.createObjectURL(this.recordedBlob);
+            
+            // Generate filename with timestamp
+            const now = new Date();
+            const timestamp = now.toISOString().replace(/[:.]/g, '-').slice(0, -5);
+            const filename = `recording_${timestamp}.webm`;
+            
+            console.log('📁 Filename:', filename);
+            
+            // Create temporary anchor element
+            const a = document.createElement('a');
+            a.style.display = 'none';
+            a.href = url;
+            a.download = filename;
+            
+            // Trigger download
+            document.body.appendChild(a);
+            a.click();
+            
+            // Cleanup
+            setTimeout(() => {
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+                console.log('✅ Download triggered, cleanup complete');
+            }, 100);
+            
+            const sizeKB = (this.recordedBlob.size / 1024).toFixed(2);
+            this.showSuccess(`Áudio exportado com sucesso! (${sizeKB} KB)`);
+            
+        } catch (error) {
+            console.error('❌ Error downloading audio:', error);
+            console.error('Error details:', error.name, error.message);
+            this.showError(`Erro ao exportar áudio: ${error.message}`);
         }
     }
 
