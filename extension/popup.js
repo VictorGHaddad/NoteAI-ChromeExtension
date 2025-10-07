@@ -220,22 +220,29 @@ class AudioRecorder {
 
     async loadLastRecording() {
         try {
+            console.log('📂 Loading last recording from storage...');
+            
             // Check if chrome.storage is available
             if (!chrome || !chrome.storage || !chrome.storage.local) {
-                console.warn('Chrome storage API not available');
+                console.warn('❌ Chrome storage API not available');
                 return;
             }
             
             const storage = await chrome.storage.local.get(['lastRecording']);
+            console.log('📦 Storage data:', storage);
             
             if (!storage.lastRecording || !storage.lastRecording.audio) {
-                console.log('No recording found in storage');
+                console.log('⚠️ No recording found in storage');
                 return;
             }
+            
+            console.log('✅ Recording found in storage, size:', storage.lastRecording.size);
             
             // Convert base64 to blob
             const response = await fetch(storage.lastRecording.audio);
             const blob = await response.blob();
+            
+            console.log('✅ Blob created, size:', blob.size, 'type:', blob.type);
             
             // Create audio URL
             const audioUrl = URL.createObjectURL(blob);
@@ -243,6 +250,7 @@ class AudioRecorder {
             
             // Store blob
             this.recordedBlob = blob;
+            console.log('✅ Blob stored in this.recordedBlob');
             
             // Show preview and actions
             this.audioPreview.classList.remove('hidden');
@@ -250,15 +258,25 @@ class AudioRecorder {
             
             const sizeKB = (storage.lastRecording.size / 1024).toFixed(2);
             this.updateStatus(`Gravação pronta!\nTamanho: ${sizeKB} KB\n\nOuça a prévia e clique em "Transcrever"`);
+            
+            console.log('✅ loadLastRecording completed successfully');
 
         } catch (error) {
-            console.error('Error loading recording:', error);
-            // Don't show error to user, just log it
+            console.error('❌ Error loading recording:', error);
+            console.error('Error details:', error.name, error.message);
+            console.error('Stack:', error.stack);
+            // Show error to user now
+            this.showError(`Erro ao carregar gravação: ${error.message}`);
         }
     }
 
     async uploadAudio() {
+        console.log('🚀 uploadAudio called');
+        console.log('📦 this.recordedBlob:', this.recordedBlob);
+        console.log('📦 Blob exists?', !!this.recordedBlob);
+        
         if (!this.recordedBlob) {
+            console.error('❌ No recorded blob available!');
             this.showError('Nenhum áudio para enviar. Grave um áudio primeiro.');
             return;
         }
