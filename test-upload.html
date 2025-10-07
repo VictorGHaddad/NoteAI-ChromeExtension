@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Test Upload</title>
+</head>
+<body>
+    <h1>Test Audio Upload</h1>
+    <input type="file" id="fileInput" accept="audio/*">
+    <button onclick="testUpload()">Upload</button>
+    <div id="result"></div>
+
+    <script>
+        async function testUpload() {
+            const fileInput = document.getElementById('fileInput');
+            const result = document.getElementById('result');
+            
+            if (!fileInput.files[0]) {
+                result.innerHTML = 'Por favor selecione um arquivo';
+                return;
+            }
+
+            try {
+                const formData = new FormData();
+                formData.append('file', fileInput.files[0]);
+
+                console.log('Uploading to: http://localhost:8000/api/audio/upload');
+                console.log('File size:', fileInput.files[0].size);
+                console.log('File type:', fileInput.files[0].type);
+
+                const response = await fetch('http://localhost:8000/api/audio/upload', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                console.log('Response status:', response.status);
+                
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error(errorData.detail || `HTTP ${response.status}`);
+                }
+
+                const data = await response.json();
+                result.innerHTML = `<pre>${JSON.stringify(data, null, 2)}</pre>`;
+                
+            } catch (error) {
+                console.error('Error:', error);
+                result.innerHTML = `<span style="color: red;">Erro: ${error.message}</span>`;
+            }
+        }
+    </script>
+</body>
+</html>

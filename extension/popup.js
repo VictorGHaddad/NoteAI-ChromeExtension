@@ -268,16 +268,32 @@ class AudioRecorder {
             this.updateStatus('Enviando áudio para transcrição...');
             this.showProgress(0);
 
+            // Debug info
+            console.log('📤 Uploading audio...');
+            console.log('API URL:', this.API_BASE_URL);
+            console.log('Blob size:', this.recordedBlob.size, 'bytes');
+            console.log('Blob type:', this.recordedBlob.type);
+            
+            // Check file size (200MB = 209715200 bytes)
+            const maxSize = 209715200; // 200MB
+            if (this.recordedBlob.size > maxSize) {
+                throw new Error(`Arquivo muito grande (${(this.recordedBlob.size / 1024 / 1024).toFixed(2)}MB). Máximo permitido: 200MB`);
+            }
+
             // Create form data
             const formData = new FormData();
             const filename = `recording_${Date.now()}.webm`;
             formData.append('file', this.recordedBlob, filename);
 
             // Upload to API
+            console.log('Making fetch request to:', `${this.API_BASE_URL}/audio/upload`);
             const response = await fetch(`${this.API_BASE_URL}/audio/upload`, {
                 method: 'POST',
                 body: formData
             });
+
+            console.log('Response status:', response.status);
+            console.log('Response OK:', response.ok);
 
             if (!response.ok) {
                 const errorData = await response.json();
@@ -294,8 +310,20 @@ class AudioRecorder {
             await chrome.storage.local.remove(['lastRecording']);
 
         } catch (error) {
-            console.error('Error uploading audio:', error);
-            this.showError(`Erro ao enviar áudio: ${error.message}`);
+            console.error('❌ Error uploading audio:', error);
+            console.error('Error name:', error.name);
+            console.error('Error message:', error.message);
+            console.error('Error stack:', error.stack);
+            
+            let errorMsg = error.message;
+            if (error.name === 'TypeError' && error.message === 'Failed to fetch') {
+                errorMsg = 'Não foi possível conectar ao servidor. Verifique:\n' +
+                          '1. Backend está rodando (docker compose up)\n' +
+                          '2. Configuração em config.js está correta\n' +
+                          '3. Tamanho do áudio não excede o limite';
+            }
+            
+            this.showError(`Erro ao enviar áudio: ${errorMsg}`);
         } finally {
             this.uploadBtn.disabled = false;
             this.hideProgress();
