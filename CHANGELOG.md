@@ -5,6 +5,23 @@ Todas as mudanças notáveis neste projeto serão documentadas neste arquivo.
 O formato é baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/),
 e este projeto adere ao [Semantic Versioning](https://semver.org/lang/pt-BR/).
 
+## [1.0.3] - 2025-10-07
+
+### 🐛 Corrigido
+- **ERR_CONNECTION_REFUSED**: Extensão tentava conectar em `localhost` quando backend estava em servidor remoto
+- **Configuração de rede**: `config.js` agora aponta para IP do servidor (`10.0.0.111`)
+- **Permissões de host**: Adicionado IP do servidor em `host_permissions` do manifest
+
+### 🔧 Alterado
+- `config.js`: `API_BASE_URL` alterado de `localhost` para `10.0.0.111`
+- `manifest.json`: Adicionado `http://10.0.0.111:8000/*` nas permissões
+
+### 🛠️ Debug
+- Adicionados logs detalhados para rastreamento de problemas de upload
+- Melhoradas mensagens de erro para facilitar diagnóstico
+
+---
+
 ## [1.0.2] - 2025-10-06
 
 ### 🐛 Corrigido
