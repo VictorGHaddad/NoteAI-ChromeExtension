@@ -15,6 +15,12 @@ Um monorepo completo para transcrição de áudio usando IA, com extensão Chrom
 - 🐳 **Docker**: Ambiente completo containerizado
 - 🗄️ **PostgreSQL**: Armazenamento persistente de dados
 
+### Extension Features (v1.0.3)
+- 💾 **Exportação de Áudio**: Baixe o arquivo de áudio original (.webm) antes de transcrever
+- 🎙️ **Gravação em Background**: Continue navegando enquanto grava
+- 📏 **Suporte a Reuniões Longas**: Até 2 horas de gravação (200MB)
+- 🔄 **Auto-save**: Gravações salvas automaticamente no storage do Chrome
+
 ### Dashboard Features (v1.0.0)
 - 📤 **Exportação**: Exporte transcrições em PDF, TXT ou Markdown
 - ✏️ **Edição de Títulos**: Edite o nome das gravações diretamente no modal

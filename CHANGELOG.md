@@ -7,6 +7,11 @@ e este projeto adere ao [Semantic Versioning](https://semver.org/lang/pt-BR/).
 
 ## [1.0.3] - 2025-10-07
 
+### ✨ Adicionado
+- **Exportação de Áudio**: Botão "💾 Exportar" para baixar gravação antes de transcrever
+- **Backup de Áudio**: Permite salvar arquivo original (.webm) localmente
+- **Filename com Timestamp**: Arquivos exportados com formato `recording_YYYY-MM-DDTHH-MM-SS.webm`
+
 ### 🐛 Corrigido
 - **ERR_CONNECTION_REFUSED**: Extensão tentava conectar em `localhost` quando backend estava em servidor remoto
 - **Configuração de rede**: `config.js` agora aponta para IP do servidor (`10.0.0.111`)
@@ -15,10 +20,12 @@ e este projeto adere ao [Semantic Versioning](https://semver.org/lang/pt-BR/).
 ### 🔧 Alterado
 - `config.js`: `API_BASE_URL` alterado de `localhost` para `10.0.0.111`
 - `manifest.json`: Adicionado `http://10.0.0.111:8000/*` nas permissões
+- Interface: 3 botões de ação (Transcrever, Exportar, Limpar) para melhor usabilidade
 
 ### 🛠️ Debug
 - Adicionados logs detalhados para rastreamento de problemas de upload
 - Melhoradas mensagens de erro para facilitar diagnóstico
+- Logs de verificação de blob e storage
 
 ---
 
