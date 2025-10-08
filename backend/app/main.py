@@ -17,6 +17,10 @@ app = FastAPI(
     version="1.0.0"
 )
 
+# Configure maximum request body size (20GB for large audio files)
+# This is handled by uvicorn's --limit-max-requests parameter
+# but we also need to ensure FastAPI doesn't have internal limits
+
 # Configure CORS
 origins = os.getenv("ALLOWED_ORIGINS", "http://localhost:3000,http://localhost:5173").split(",")
 

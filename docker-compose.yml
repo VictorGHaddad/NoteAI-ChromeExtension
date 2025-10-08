@@ -27,6 +27,7 @@ services:
       context: ./backend
       dockerfile: Dockerfile
     container_name: audio-transcriber-backend
+    restart: unless-stopped
     environment:
       - DATABASE_URL=postgresql://postgres:postgres@postgres:5432/audio_transcriber
       - OPENAI_API_KEY=${OPENAI_API_KEY}
