@@ -288,3 +288,39 @@ async def regenerate_summary(
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Erro ao regenerar resumo: {str(e)}")
+
+@router.get("/estimate-cost")
+async def estimate_transcription_cost(file_size_mb: float):
+    """
+    Estimate the cost of transcribing an audio file
+    
+    Args:
+        file_size_mb: Size of the audio file in MB
+    
+    Returns:
+        Estimated cost and duration based on OpenAI Whisper pricing
+    """
+    try:
+        # OpenAI Whisper pricing: $0.006 per minute
+        PRICE_PER_MINUTE = 0.006
+        
+        # Estimate duration based on file size
+        # Average bitrate for webm audio: ~128 kbps = ~0.96 MB/minute
+        # But can vary from 0.5 MB/min (low quality) to 2 MB/min (high quality)
+        # We'll use conservative estimate: 1 MB/minute
+        ESTIMATED_MB_PER_MINUTE = 1.0
+        
+        estimated_minutes = file_size_mb / ESTIMATED_MB_PER_MINUTE
+        estimated_cost = estimated_minutes * PRICE_PER_MINUTE
+        
+        return {
+            "file_size_mb": file_size_mb,
+            "estimated_duration_minutes": round(estimated_minutes, 1),
+            "estimated_cost_usd": round(estimated_cost, 4),
+            "estimated_cost_brl": round(estimated_cost * 5.0, 2),  # Approximate BRL conversion
+            "price_per_minute_usd": PRICE_PER_MINUTE,
+            "note": "Estimativa baseada em taxa média de 1 MB/minuto. O custo real pode variar."
+        }
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Erro ao calcular estimativa: {str(e)}")
