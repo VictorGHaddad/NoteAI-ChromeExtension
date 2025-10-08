@@ -328,10 +328,10 @@ class AudioRecorder {
             console.log('Blob size:', this.recordedBlob.size, 'bytes');
             console.log('Blob type:', this.recordedBlob.type);
             
-            // Check file size (200MB = 209715200 bytes)
-            const maxSize = 209715200; // 200MB
+            // Check file size (20GB = 21474836480 bytes)
+            const maxSize = 21474836480; // 20GB (20000MB)
             if (this.recordedBlob.size > maxSize) {
-                throw new Error(`Arquivo muito grande (${(this.recordedBlob.size / 1024 / 1024).toFixed(2)}MB). Máximo permitido: 200MB`);
+                throw new Error(`Arquivo muito grande (${(this.recordedBlob.size / 1024 / 1024).toFixed(2)}MB). Máximo permitido: 20000MB (20GB)`);
             }
 
             // Create form data
