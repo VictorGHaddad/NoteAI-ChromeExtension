@@ -5,6 +5,34 @@ Todas as mudanças notáveis neste projeto serão documentadas neste arquivo.
 O formato é baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/),
 e este projeto adere ao [Semantic Versioning](https://semver.org/lang/pt-BR/).
 
+## [1.0.5] - 2025-10-07
+
+### ✨ Adicionado
+- **Estimativa de Custo**: Endpoint `/api/audio/estimate-cost` para calcular custo de transcrição
+  - Baseado em pricing OpenAI Whisper ($0.006/minuto)
+  - Retorna estimativa em USD e BRL
+  - Estimativa de duração baseada em tamanho do arquivo
+- **Upload Externo no Dashboard**: Permite carregar áudios gravados fora da extensão Chrome
+  - Interface drag & drop para arquivos de áudio
+  - Barra de progresso durante upload e transcrição
+  - Suporte a múltiplos formatos de áudio
+  - Botão "Upload Áudio" na barra de ferramentas
+- **Suporte a Gravações Longas**: Limite de áudio aumentado para 20GB
+  - Permite gravações de até 40 minutos ou mais
+  - Configurável via `MAX_AUDIO_SIZE_MB=20000`
+  - Documentação atualizada em `.env.example`
+
+### 🔧 Alterado
+- `.env.example`: Adicionadas referências para gravações de 40 minutos (~400MB) e 2 horas (~1200MB)
+- Extension: Integração com endpoint de estimativa de custo
+- Dashboard: Novo estado para gerenciar upload de arquivos externos
+
+### 📝 Documentação
+- Exemplos de estimativas de custo no `.env.example`
+- Orientações para configurar limites maiores de áudio
+
+---
+
 ## [1.0.4] - 2025-10-07
 
 ### ✨ Adicionado
