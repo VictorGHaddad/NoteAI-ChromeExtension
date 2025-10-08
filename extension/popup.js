@@ -292,25 +292,27 @@ class AudioRecorder {
             console.log('💰 Cost estimate:', estimate);
             
             // Build message with warnings if present
-            let costMessage = `
-💰 Estimativa de Custo:
-• Duração estimada: ~${estimate.estimated_duration_minutes} min
-• Custo estimado: $${estimate.estimated_cost_usd} USD (~R$ ${estimate.estimated_cost_brl})
-• Taxa: $${estimate.price_per_minute_usd}/minuto
-            `.trim();
+            let costMessage = `💰 ESTIMATIVA DE CUSTO
+━━━━━━━━━━━━━━━━━━━━
+📊 Duração: ~${estimate.estimated_duration_minutes} minutos
+💵 Custo: $${estimate.estimated_cost_usd} USD
+💷 Custo: R$ ${estimate.estimated_cost_brl} BRL
+📈 Taxa: $${estimate.price_per_minute_usd}/minuto
+━━━━━━━━━━━━━━━━━━━━`;
             
             // Add warnings if any
             if (estimate.warnings && estimate.warnings.length > 0) {
-                costMessage += '\n\n' + estimate.warnings.join('\n');
+                costMessage += '\n\n⚠️ AVISOS:\n' + estimate.warnings.join('\n');
             }
             
-            // Show error if exceeds limit, otherwise show success
+            // Show error if exceeds limit, otherwise show cost info
             if (estimate.exceeds_limit) {
-                this.showError(costMessage + '\n\n❌ Arquivo muito grande para transcrever!');
+                costMessage += '\n\n❌ ARQUIVO MUITO GRANDE!\nMáximo: ' + estimate.max_allowed_mb + 'MB (~' + estimate.max_allowed_minutes + ' minutos)';
+                this.showError(costMessage);
                 // Disable transcribe button
                 this.transcribeBtn.disabled = true;
             } else {
-                this.showSuccess(costMessage);
+                this.showCostInfo(costMessage);
                 this.transcribeBtn.disabled = false;
             }
             
@@ -585,9 +587,10 @@ class AudioRecorder {
         }, 7000);
     }
 
-    showSuccess(message) {
+    showSuccess(message, duration = 4000) {
         const successDiv = document.createElement('div');
         successDiv.className = 'success';
+        successDiv.style.whiteSpace = 'pre-line';
         successDiv.textContent = message;
         this.messages.appendChild(successDiv);
         
@@ -595,7 +598,29 @@ class AudioRecorder {
             if (successDiv.parentNode) {
                 successDiv.parentNode.removeChild(successDiv);
             }
-        }, 4000);
+        }, duration);
+    }
+
+    showCostInfo(message) {
+        // Clear previous cost info
+        const existingCostInfo = this.messages.querySelector('.cost-info');
+        if (existingCostInfo) {
+            existingCostInfo.remove();
+        }
+        
+        const costDiv = document.createElement('div');
+        costDiv.className = 'success cost-info';
+        costDiv.style.whiteSpace = 'pre-line';
+        costDiv.style.fontSize = '12px';
+        costDiv.textContent = message;
+        this.messages.appendChild(costDiv);
+        
+        // Cost info stays for 15 seconds so user can read it
+        setTimeout(() => {
+            if (costDiv.parentNode) {
+                costDiv.parentNode.removeChild(costDiv);
+            }
+        }, 15000);
     }
 
     clearMessages() {
