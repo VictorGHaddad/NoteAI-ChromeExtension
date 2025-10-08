@@ -46,6 +46,7 @@ import {
   Check,
   Add,
   LocalOffer,
+  CloudUpload,
 } from '@mui/icons-material'
 import axios from 'axios'
 import { jsPDF } from 'jspdf'
@@ -71,6 +72,12 @@ function App() {
   const [snackbarMessage, setSnackbarMessage] = useState('')
   const [newTag, setNewTag] = useState('')
   const [isAddingTag, setIsAddingTag] = useState(false)
+  
+  // Upload dialog state
+  const [uploadDialogOpen, setUploadDialogOpen] = useState(false)
+  const [uploadFile, setUploadFile] = useState(null)
+  const [uploading, setUploading] = useState(false)
+  const [uploadProgress, setUploadProgress] = useState(0)
 
   useEffect(() => {
     fetchTranscriptions()
@@ -87,6 +94,48 @@ function App() {
       console.error('Error fetching transcriptions:', err)
     } finally {
       setLoading(false)
+    }
+  }
+
+  const uploadAudioFile = async () => {
+    if (!uploadFile) {
+      setSnackbarMessage('Selecione um arquivo de áudio')
+      setSnackbarOpen(true)
+      return
+    }
+
+    try {
+      setUploading(true)
+      setUploadProgress(0)
+
+      const formData = new FormData()
+      formData.append('file', uploadFile)
+
+      const response = await axios.post(`${API_BASE_URL}/audio/upload`, formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data'
+        },
+        onUploadProgress: (progressEvent) => {
+          const percentCompleted = Math.round((progressEvent.loaded * 100) / progressEvent.total)
+          setUploadProgress(percentCompleted)
+        }
+      })
+
+      // Add new transcription to the list
+      setTranscriptions(prev => [response.data, ...prev])
+      
+      // Close dialog and reset
+      setUploadDialogOpen(false)
+      setUploadFile(null)
+      setSnackbarMessage('Áudio transcrito com sucesso!')
+      setSnackbarOpen(true)
+      
+    } catch (err) {
+      setError(`Erro ao fazer upload: ${err.message}`)
+      console.error('Upload error:', err)
+    } finally {
+      setUploading(false)
+      setUploadProgress(0)
     }
   }
 
@@ -507,6 +556,19 @@ ${transcription.language ? `- **Idioma:** ${transcription.language}` : ''}
               Audio Transcriber
             </Typography>
           </Box>
+          <Button
+            startIcon={<CloudUpload />}
+            onClick={() => setUploadDialogOpen(true)}
+            sx={{
+              mr: 2,
+              color: 'black',
+              textTransform: 'none',
+              fontWeight: 500,
+              '&:hover': { bgcolor: '#f5f5f5' }
+            }}
+          >
+            Upload Áudio
+          </Button>
           <IconButton 
             onClick={fetchTranscriptions}
             sx={{ 
@@ -1162,6 +1224,109 @@ ${transcription.language ? `- **Idioma:** ${transcription.language}` : ''}
             </DialogActions>
           </>
         ) : null}
+      </Dialog>
+
+      {/* Upload Dialog */}
+      <Dialog
+        open={uploadDialogOpen}
+        onClose={() => !uploading && setUploadDialogOpen(false)}
+        maxWidth="sm"
+        fullWidth
+        PaperProps={{
+          sx: {
+            borderRadius: '12px',
+            border: '1px solid #e5e5e5'
+          }
+        }}
+      >
+        <DialogTitle sx={{ 
+          borderBottom: '1px solid #e5e5e5',
+          py: 2,
+          px: 3,
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center'
+        }}>
+          <Typography variant="h6" sx={{ fontWeight: 600, color: '#000' }}>
+            Upload de Áudio
+          </Typography>
+          <IconButton 
+            onClick={() => !uploading && setUploadDialogOpen(false)}
+            disabled={uploading}
+            size="small"
+          >
+            <Close />
+          </IconButton>
+        </DialogTitle>
+        
+        <DialogContent sx={{ py: 3 }}>
+          <Box sx={{ textAlign: 'center' }}>
+            <Box
+              sx={{
+                border: '2px dashed #e5e5e5',
+                borderRadius: '12px',
+                p: 4,
+                mb: 2,
+                bgcolor: '#fafafa',
+                cursor: 'pointer',
+                '&:hover': {
+                  bgcolor: '#f5f5f5',
+                  borderColor: '#d4d4d4'
+                },
+                transition: 'all 0.2s'
+              }}
+              onClick={() => !uploading && document.getElementById('audio-file-input').click()}
+            >
+              <CloudUpload sx={{ fontSize: 48, color: '#666', mb: 2 }} />
+              <Typography variant="body1" sx={{ color: '#333', mb: 1 }}>
+                {uploadFile ? uploadFile.name : 'Clique para selecionar um arquivo de áudio'}
+              </Typography>
+              <Typography variant="body2" sx={{ color: '#666' }}>
+                Formatos suportados: MP3, WAV, M4A, OGG, WEBM
+              </Typography>
+              <input
+                id="audio-file-input"
+                type="file"
+                accept="audio/*,.mp3,.wav,.m4a,.ogg,.webm"
+                style={{ display: 'none' }}
+                onChange={(e) => setUploadFile(e.target.files[0])}
+                disabled={uploading}
+              />
+            </Box>
+            
+            {uploading && (
+              <Box sx={{ mt: 2 }}>
+                <CircularProgress variant="determinate" value={uploadProgress} />
+                <Typography variant="body2" sx={{ mt: 1, color: '#666' }}>
+                  Enviando e transcrevendo... {uploadProgress}%
+                </Typography>
+              </Box>
+            )}
+          </Box>
+        </DialogContent>
+        
+        <DialogActions sx={{ px: 3, pb: 3 }}>
+          <Button
+            onClick={() => setUploadDialogOpen(false)}
+            disabled={uploading}
+            sx={{ textTransform: 'none', color: '#666' }}
+          >
+            Cancelar
+          </Button>
+          <Button
+            onClick={uploadAudioFile}
+            disabled={!uploadFile || uploading}
+            variant="contained"
+            sx={{
+              bgcolor: '#000',
+              textTransform: 'none',
+              '&:hover': { bgcolor: '#333' },
+              '&:disabled': { bgcolor: '#e5e5e5' }
+            }}
+          >
+            {uploading ? 'Enviando...' : 'Transcrever'}
+          </Button>
+        </DialogActions>
       </Dialog>
 
       {/* Snackbar for notifications */}

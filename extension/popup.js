@@ -259,6 +259,11 @@ class AudioRecorder {
             this.actions.classList.remove('hidden');
             
             const sizeKB = (storage.lastRecording.size / 1024).toFixed(2);
+            const sizeMB = (storage.lastRecording.size / (1024 * 1024)).toFixed(2);
+            
+            // Get cost estimate
+            await this.showCostEstimate(parseFloat(sizeMB));
+            
             this.updateStatus(`Gravação pronta!\nTamanho: ${sizeKB} KB\n\nOuça a prévia e clique em "Transcrever"`);
             
             console.log('✅ loadLastRecording completed successfully');
@@ -269,6 +274,35 @@ class AudioRecorder {
             console.error('Stack:', error.stack);
             // Show error to user now
             this.showError(`Erro ao carregar gravação: ${error.message}`);
+        }
+    }
+
+    async showCostEstimate(sizeMB) {
+        try {
+            console.log('💰 Fetching cost estimate for', sizeMB, 'MB');
+            
+            const response = await fetch(`${this.API_BASE_URL}/audio/estimate-cost?file_size_mb=${sizeMB}`);
+            
+            if (!response.ok) {
+                console.warn('Could not fetch cost estimate');
+                return;
+            }
+            
+            const estimate = await response.json();
+            console.log('💰 Cost estimate:', estimate);
+            
+            const costMessage = `
+💰 Estimativa de Custo:
+• Duração estimada: ~${estimate.estimated_duration_minutes} min
+• Custo estimado: $${estimate.estimated_cost_usd} USD (~R$ ${estimate.estimated_cost_brl})
+• Taxa: $${estimate.price_per_minute_usd}/minuto
+            `.trim();
+            
+            this.showSuccess(costMessage);
+            
+        } catch (error) {
+            console.error('Error fetching cost estimate:', error);
+            // Don't show error to user, it's not critical
         }
     }
 
@@ -294,10 +328,10 @@ class AudioRecorder {
             console.log('Blob size:', this.recordedBlob.size, 'bytes');
             console.log('Blob type:', this.recordedBlob.type);
             
-            // Check file size (200MB = 209715200 bytes)
-            const maxSize = 209715200; // 200MB
+            // Check file size (20GB = 21474836480 bytes)
+            const maxSize = 21474836480; // 20GB (20000MB)
             if (this.recordedBlob.size > maxSize) {
-                throw new Error(`Arquivo muito grande (${(this.recordedBlob.size / 1024 / 1024).toFixed(2)}MB). Máximo permitido: 200MB`);
+                throw new Error(`Arquivo muito grande (${(this.recordedBlob.size / 1024 / 1024).toFixed(2)}MB). Máximo permitido: 20000MB (20GB)`);
             }
 
             // Create form data
