@@ -35,7 +35,13 @@ def get_summarizer_service():
 
 # Supported audio formats
 SUPPORTED_FORMATS = {'.mp3', '.wav', '.m4a', '.ogg', '.webm', '.mp4', '.mpeg', '.mpga'}
-MAX_FILE_SIZE = int(os.getenv("MAX_AUDIO_SIZE_MB", "25")) * 1024 * 1024  # Convert MB to bytes
+
+# OpenAI Whisper API has a hard limit of 25MB per request
+# We'll set our limit to 30MB (approximately 30 minutes of audio at 1MB/min)
+# Files larger than 25MB will be automatically split into chunks
+MAX_FILE_SIZE = 30 * 1024 * 1024  # 30MB limit
+OPENAI_CHUNK_LIMIT = 25 * 1024 * 1024  # 25MB - OpenAI's hard limit
+RECOMMENDED_MAX_MINUTES = 30  # Recommended maximum duration
 
 @router.post("/upload")
 async def upload_audio(
@@ -298,7 +304,7 @@ async def estimate_transcription_cost(file_size_mb: float):
         file_size_mb: Size of the audio file in MB
     
     Returns:
-        Estimated cost and duration based on OpenAI Whisper pricing
+        Estimated cost and duration based on OpenAI Whisper pricing with warnings
     """
     try:
         # OpenAI Whisper pricing: $0.006 per minute
@@ -313,12 +319,30 @@ async def estimate_transcription_cost(file_size_mb: float):
         estimated_minutes = file_size_mb / ESTIMATED_MB_PER_MINUTE
         estimated_cost = estimated_minutes * PRICE_PER_MINUTE
         
+        # Check limits and generate warnings
+        warnings = []
+        exceeds_limit = False
+        
+        if file_size_mb > MAX_FILE_SIZE / (1024 * 1024):
+            exceeds_limit = True
+            warnings.append(f"⚠️ Arquivo excede o limite de {MAX_FILE_SIZE // (1024*1024)}MB")
+        elif file_size_mb > 25:
+            warnings.append(f"⚠️ Arquivo próximo do limite da API OpenAI (25MB). Pode falhar.")
+        elif estimated_minutes > RECOMMENDED_MAX_MINUTES:
+            warnings.append(f"⚠️ Duração estimada ({round(estimated_minutes, 1)}min) excede o recomendado ({RECOMMENDED_MAX_MINUTES}min)")
+        elif estimated_minutes > 25:
+            warnings.append(f"ℹ️ Arquivo grande ({round(estimated_minutes, 1)}min). Transcrição pode demorar.")
+        
         return {
             "file_size_mb": file_size_mb,
             "estimated_duration_minutes": round(estimated_minutes, 1),
             "estimated_cost_usd": round(estimated_cost, 4),
             "estimated_cost_brl": round(estimated_cost * 5.0, 2),  # Approximate BRL conversion
             "price_per_minute_usd": PRICE_PER_MINUTE,
+            "max_allowed_minutes": RECOMMENDED_MAX_MINUTES,
+            "max_allowed_mb": MAX_FILE_SIZE // (1024 * 1024),
+            "exceeds_limit": exceeds_limit,
+            "warnings": warnings,
             "note": "Estimativa baseada em taxa média de 1 MB/minuto. O custo real pode variar."
         }
         

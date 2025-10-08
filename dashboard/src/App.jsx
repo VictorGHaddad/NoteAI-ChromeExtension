@@ -105,6 +105,21 @@ function App() {
     }
 
     try {
+      // Check file size limit (30MB)
+      const fileSizeMB = uploadFile.size / (1024 * 1024)
+      const MAX_SIZE_MB = 30
+      
+      if (fileSizeMB > MAX_SIZE_MB) {
+        setError(`Arquivo muito grande (${fileSizeMB.toFixed(2)}MB). Máximo permitido: ${MAX_SIZE_MB}MB (~30 minutos)`)
+        return
+      }
+      
+      // Show warning for large files
+      if (fileSizeMB > 25) {
+        setSnackbarMessage(`⚠️ Arquivo grande (${fileSizeMB.toFixed(2)}MB). A transcrição pode demorar...`)
+        setSnackbarOpen(true)
+      }
+      
       setUploading(true)
       setUploadProgress(0)
 
@@ -131,7 +146,7 @@ function App() {
       setSnackbarOpen(true)
       
     } catch (err) {
-      setError(`Erro ao fazer upload: ${err.message}`)
+      setError(`Erro ao fazer upload: ${err.response?.data?.detail || err.message}`)
       console.error('Upload error:', err)
     } finally {
       setUploading(false)

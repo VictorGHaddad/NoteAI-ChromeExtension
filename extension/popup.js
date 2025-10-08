@@ -291,14 +291,28 @@ class AudioRecorder {
             const estimate = await response.json();
             console.log('💰 Cost estimate:', estimate);
             
-            const costMessage = `
+            // Build message with warnings if present
+            let costMessage = `
 💰 Estimativa de Custo:
 • Duração estimada: ~${estimate.estimated_duration_minutes} min
 • Custo estimado: $${estimate.estimated_cost_usd} USD (~R$ ${estimate.estimated_cost_brl})
 • Taxa: $${estimate.price_per_minute_usd}/minuto
             `.trim();
             
-            this.showSuccess(costMessage);
+            // Add warnings if any
+            if (estimate.warnings && estimate.warnings.length > 0) {
+                costMessage += '\n\n' + estimate.warnings.join('\n');
+            }
+            
+            // Show error if exceeds limit, otherwise show success
+            if (estimate.exceeds_limit) {
+                this.showError(costMessage + '\n\n❌ Arquivo muito grande para transcrever!');
+                // Disable transcribe button
+                this.transcribeBtn.disabled = true;
+            } else {
+                this.showSuccess(costMessage);
+                this.transcribeBtn.disabled = false;
+            }
             
         } catch (error) {
             console.error('Error fetching cost estimate:', error);
@@ -328,10 +342,10 @@ class AudioRecorder {
             console.log('Blob size:', this.recordedBlob.size, 'bytes');
             console.log('Blob type:', this.recordedBlob.type);
             
-            // Check file size (20GB = 21474836480 bytes)
-            const maxSize = 21474836480; // 20GB (20000MB)
+            // Check file size (30MB = 31457280 bytes - OpenAI Whisper limit)
+            const maxSize = 31457280; // 30MB
             if (this.recordedBlob.size > maxSize) {
-                throw new Error(`Arquivo muito grande (${(this.recordedBlob.size / 1024 / 1024).toFixed(2)}MB). Máximo permitido: 20000MB (20GB)`);
+                throw new Error(`Arquivo muito grande (${(this.recordedBlob.size / 1024 / 1024).toFixed(2)}MB). Máximo permitido: 30MB (~30 minutos)`);
             }
 
             // Create form data
