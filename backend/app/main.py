@@ -5,16 +5,16 @@ import os
 from dotenv import load_dotenv
 
 from .database import create_tables
-from .routes import audio
+from .routes import audio, auth
 
 # Load environment variables
 load_dotenv()
 
 # Create FastAPI application
 app = FastAPI(
-    title="Audio Transcriber API",
-    description="API para transcrição de áudio e geração de resumos usando OpenAI",
-    version="1.0.0"
+    title="Meeting AI by P&D",
+    description="API para transcrição de áudio e geração de resumos usando OpenAI - Sistema Multi-Usuário",
+    version="2.0.0"
 )
 
 # Configure maximum request body size (20GB for large audio files)
@@ -38,16 +38,17 @@ async def startup_event():
     create_tables()
 
 # Include routers
+app.include_router(auth.router, prefix="/api")
 app.include_router(audio.router, prefix="/api")
 
 # Health check endpoint
 @app.get("/")
 async def root():
-    return {"message": "Audio Transcriber API is running!", "version": "1.0.0"}
+    return {"message": "Meeting AI by P&D API is running!", "version": "2.0.0"}
 
 @app.get("/health")
 async def health_check():
-    return {"status": "healthy", "service": "audio-transcriber-api"}
+    return {"status": "healthy", "service": "meeting-ai-api"}
 
 @app.get("/api/test-openai")
 async def test_openai():

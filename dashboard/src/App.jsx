@@ -55,6 +55,22 @@ import { saveAs } from 'file-saver'
 // API Base URL - usa variável de ambiente ou fallback para localhost
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api'
 
+// Axios instance with auth interceptor
+const api = axios.create({
+  baseURL: API_BASE_URL
+})
+
+// Add token to all requests
+api.interceptors.request.use((config) => {
+  const token = localStorage.getItem('authToken')
+  if (token) {
+    config.headers.Authorization = `Bearer ${token}`
+  }
+  return config
+}, (error) => {
+  return Promise.reject(error)
+})
+
 function App() {
   const [transcriptions, setTranscriptions] = useState([])
   const [loading, setLoading] = useState(true)
@@ -64,6 +80,13 @@ function App() {
   const [viewMode, setViewMode] = useState(() => localStorage.getItem('viewMode') || 'normal')
   const [fontSize, setFontSize] = useState(() => localStorage.getItem('fontSize') || 'medium')
   const [exportMenuAnchor, setExportMenuAnchor] = useState(null)
+  
+  // Auth states
+  const [isAuthenticated, setIsAuthenticated] = useState(false)
+  const [loginEmail, setLoginEmail] = useState('')
+  const [loginPassword, setLoginPassword] = useState('')
+  const [loginError, setLoginError] = useState('')
+  const [loggingIn, setLoggingIn] = useState(false)
   
   // New states for editing
   const [isEditingTitle, setIsEditingTitle] = useState(false)
@@ -80,14 +103,47 @@ function App() {
   const [uploadProgress, setUploadProgress] = useState(0)
 
   useEffect(() => {
-    fetchTranscriptions()
+    const token = localStorage.getItem('authToken')
+    if (token) {
+      setIsAuthenticated(true)
+      fetchTranscriptions()
+    } else {
+      setLoading(false)
+    }
   }, [])
+
+  const handleLogin = async (e) => {
+    e.preventDefault()
+    setLoggingIn(true)
+    setLoginError('')
+
+    try {
+      const response = await axios.post(`${API_BASE_URL}/auth/login`, {
+        email: loginEmail,
+        password: loginPassword
+      })
+
+      localStorage.setItem('authToken', response.data.access_token)
+      setIsAuthenticated(true)
+      fetchTranscriptions()
+    } catch (err) {
+      setLoginError(err.response?.data?.detail || 'Erro ao fazer login')
+    } finally {
+      setLoggingIn(false)
+    }
+  }
+
+  const handleLogout = () => {
+    localStorage.removeItem('authToken')
+    setIsAuthenticated(false)
+    setTranscriptions([])
+  }
 
   const fetchTranscriptions = async () => {
     try {
       setLoading(true)
       setError('')
-      const response = await axios.get(`${API_BASE_URL}/audio/transcriptions`)
+      const response = await api.get(`audio/transcriptions`)
       setTranscriptions(response.data.transcriptions || [])
     } catch (err) {
       setError(`Erro ao carregar transcrições: ${err.message}`)
@@ -126,7 +182,7 @@ function App() {
       const formData = new FormData()
       formData.append('file', uploadFile)
 
-      const response = await axios.post(`${API_BASE_URL}/audio/upload`, formData, {
+      const response = await api.post(`audio/upload`, formData, {
         headers: {
           'Content-Type': 'multipart/form-data'
         },
@@ -156,7 +212,7 @@ function App() {
 
   const deleteTranscription = async (id) => {
     try {
-      await axios.delete(`${API_BASE_URL}/audio/transcriptions/${id}`)
+      await api.delete(`audio/transcriptions/${id}`)
       setTranscriptions(prev => prev.filter(t => t.id !== id))
       if (selectedTranscription && selectedTranscription.id === id) {
         setDialogOpen(false)
@@ -169,7 +225,7 @@ function App() {
 
   const regenerateSummary = async (id) => {
     try {
-      const response = await axios.post(`${API_BASE_URL}/audio/transcriptions/${id}/regenerate-summary`)
+      const response = await api.post(`audio/transcriptions/${id}/regenerate-summary`)
       setTranscriptions(prev => 
         prev.map(t => t.id === id ? response.data : t)
       )
@@ -195,8 +251,8 @@ function App() {
     }
 
     try {
-      const response = await axios.patch(
-        `${API_BASE_URL}/audio/transcriptions/${selectedTranscription.id}`,
+      const response = await api.patch(
+        `audio/transcriptions/${selectedTranscription.id}`,
         { filename: editedTitle }
       )
       
@@ -246,8 +302,8 @@ function App() {
     const updatedTags = [...currentTags, newTag.trim()]
 
     try {
-      const response = await axios.patch(
-        `${API_BASE_URL}/audio/transcriptions/${selectedTranscription.id}`,
+      const response = await api.patch(
+        `audio/transcriptions/${selectedTranscription.id}`,
         { tags: updatedTags }
       )
       
@@ -269,8 +325,8 @@ function App() {
     const updatedTags = (selectedTranscription.tags || []).filter(tag => tag !== tagToRemove)
 
     try {
-      const response = await axios.patch(
-        `${API_BASE_URL}/audio/transcriptions/${selectedTranscription.id}`,
+      const response = await api.patch(
+        `audio/transcriptions/${selectedTranscription.id}`,
         { tags: updatedTags }
       )
       
@@ -530,6 +586,74 @@ ${transcription.language ? `- **Idioma:** ${transcription.language}` : ''}
 
   const stats = getTotalStats()
 
+  // Login screen
+  if (!isAuthenticated) {
+    return (
+      <Box sx={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', bgcolor: '#fafafa' }}>
+        <Paper elevation={0} sx={{ p: 4, maxWidth: 400, width: '100%', border: '1px solid #e5e5e5', borderRadius: '12px' }}>
+          <Box sx={{ textAlign: 'center', mb: 3 }}>
+            <Box sx={{ mb: 2, display: 'flex', justifyContent: 'center' }}>
+              <img 
+                src="/ccm-logo.png" 
+                alt="CCM Tecnologia" 
+                style={{ height: '60px', width: 'auto' }}
+              />
+            </Box>
+            <Typography variant="h5" sx={{ fontWeight: 600, color: 'black', mb: 1 }}>
+              Meeting AI by P&D
+            </Typography>
+            <Typography variant="body2" sx={{ color: '#666' }}>
+              Faça login para continuar
+            </Typography>
+          </Box>
+
+          {loginError && (
+            <Alert severity="error" sx={{ mb: 2 }}>
+              {loginError}
+            </Alert>
+          )}
+
+          <form onSubmit={handleLogin}>
+            <TextField
+              fullWidth
+              label="Email"
+              type="email"
+              value={loginEmail}
+              onChange={(e) => setLoginEmail(e.target.value)}
+              disabled={loggingIn}
+              sx={{ mb: 2 }}
+              required
+            />
+            <TextField
+              fullWidth
+              label="Senha"
+              type="password"
+              value={loginPassword}
+              onChange={(e) => setLoginPassword(e.target.value)}
+              disabled={loggingIn}
+              sx={{ mb: 3 }}
+              required
+            />
+            <Button
+              type="submit"
+              fullWidth
+              variant="contained"
+              disabled={loggingIn}
+              sx={{
+                bgcolor: 'black',
+                py: 1.5,
+                textTransform: 'none',
+                '&:hover': { bgcolor: '#333' }
+              }}
+            >
+              {loggingIn ? 'Entrando...' : 'Entrar'}
+            </Button>
+          </form>
+        </Paper>
+      </Box>
+    )
+  }
+
   return (
     <Box sx={{ 
       minHeight: '100vh', 
@@ -547,18 +671,11 @@ ${transcription.language ? `- **Idioma:** ${transcription.language}` : ''}
       >
         <Toolbar sx={{ py: 1 }}>
           <Box sx={{ display: 'flex', alignItems: 'center', flexGrow: 1 }}>
-            <Box sx={{ 
-              width: 32, 
-              height: 32, 
-              borderRadius: '6px',
-              bgcolor: 'black',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              mr: 2,
-            }}>
-              <Mic sx={{ color: 'white', fontSize: 18 }} />
-            </Box>
+            <img 
+              src="/ccm-logo.png" 
+              alt="CCM Tecnologia" 
+              style={{ height: '32px', width: 'auto', marginRight: '16px' }}
+            />
             <Typography 
               variant="h6" 
               component="div" 
@@ -568,7 +685,7 @@ ${transcription.language ? `- **Idioma:** ${transcription.language}` : ''}
                 fontSize: '1.1rem',
               }}
             >
-              Audio Transcriber
+              Meeting AI by P&D
             </Typography>
           </Box>
           <Button
@@ -583,6 +700,17 @@ ${transcription.language ? `- **Idioma:** ${transcription.language}` : ''}
             }}
           >
             Upload Áudio
+          </Button>
+          <Button
+            onClick={handleLogout}
+            sx={{
+              mr: 2,
+              color: '#666',
+              textTransform: 'none',
+              '&:hover': { bgcolor: '#f5f5f5', color: '#000' }
+            }}
+          >
+            Sair
           </Button>
           <IconButton 
             onClick={fetchTranscriptions}

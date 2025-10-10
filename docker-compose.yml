@@ -4,7 +4,7 @@ services:
   # PostgreSQL Database
   postgres:
     image: postgres:15-alpine
-    container_name: audio-transcriber-db
+    container_name: meeting-ai-db
     environment:
       POSTGRES_DB: audio_transcriber
       POSTGRES_USER: postgres
@@ -19,23 +19,25 @@ services:
       timeout: 5s
       retries: 5
     networks:
-      - audio-transcriber-network
+      - audio-transcriber-network-3
 
   # FastAPI Backend
   backend:
     build:
       context: ./backend
       dockerfile: Dockerfile
-    container_name: audio-transcriber-backend
+    container_name: meeting-ai-backend
     restart: unless-stopped
     environment:
       - DATABASE_URL=postgresql://postgres:postgres@postgres:5432/audio_transcriber
       - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - SECRET_KEY=${SECRET_KEY}
+      - ACCESS_TOKEN_EXPIRE_MINUTES=${ACCESS_TOKEN_EXPIRE_MINUTES:-1440}
       - MAX_AUDIO_SIZE_MB=${MAX_AUDIO_SIZE_MB:-200}
       - DEBUG=True
       - HOST=0.0.0.0
       - PORT=8000
-      - ALLOWED_ORIGINS=http://localhost:3000,http://localhost:5173
+      - ALLOWED_ORIGINS=http://localhost:3000,http://localhost:5173,http://10.0.0.111:3000,chrome-extension://*
     ports:
       - "0.0.0.0:8000:8000"
     volumes:
@@ -50,21 +52,22 @@ services:
       retries: 3
       start_period: 40s
     networks:
-      - audio-transcriber-network
+      - audio-transcriber-network-3
 
   # React Dashboard
   dashboard:
     build:
       context: ./dashboard
       dockerfile: Dockerfile
-    container_name: audio-transcriber-dashboard
+    container_name: meeting-ai-dashboard
     ports:
       - "0.0.0.0:3000:3000"
-    volumes:
-      - ./dashboard:/app
-      - /app/node_modules
+    # Removed volumes for production - code is copied during build
+    # volumes:
+    #   - ./dashboard:/app
+    #   - /app/node_modules
     environment:
-      - VITE_API_URL=http://localhost:8000/api
+      - VITE_API_BASE_URL=http://10.0.0.111:8000/api
     depends_on:
       - backend
     healthcheck:
@@ -74,12 +77,12 @@ services:
       retries: 3
       start_period: 40s
     networks:
-      - audio-transcriber-network
+      - audio-transcriber-network-3
 
 volumes:
   postgres_data:
     driver: local
 
 networks:
-  audio-transcriber-network:
+  audio-transcriber-network-3:
     driver: bridge

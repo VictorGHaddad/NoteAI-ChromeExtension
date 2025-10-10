@@ -1,19 +1,24 @@
 import os
+from typing import Optional
 import openai
 from dotenv import load_dotenv
 
 load_dotenv()
 
 class SummarizerService:
-    def __init__(self):
-        api_key = os.getenv("OPENAI_API_KEY")
-        if not api_key or api_key == "your_openai_api_key_here":
-            raise ValueError("OPENAI_API_KEY environment variable is required and must be set to a valid OpenAI API key")
+    def __init__(self, api_key: Optional[str] = None):
+        # Use provided API key or fallback to environment variable
+        if api_key:
+            self.api_key = api_key
+        else:
+            self.api_key = os.getenv("OPENAI_API_KEY")
+        
+        if not self.api_key or self.api_key == "your_openai_api_key_here":
+            raise ValueError("OpenAI API key is required. Please provide api_key parameter or set OPENAI_API_KEY environment variable")
         
         # Simple client initialization
-        self.api_key = api_key
         self.client = None
-        print(f"SummarizerService initialized with API key ending in: ...{api_key[-4:]}")
+        print(f"SummarizerService initialized with API key ending in: ...{self.api_key[-4:]}")
     
     def _get_client(self):
         """Get OpenAI client"""
