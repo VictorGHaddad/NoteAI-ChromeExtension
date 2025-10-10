@@ -6,7 +6,8 @@ from pydantic import BaseModel
 import mimetypes
 
 from ..database import get_db
-from ..models import Transcription
+from ..models import Transcription, User
+from ..dependencies import get_current_active_user
 from ..services.transcriber import TranscriberService
 from ..services.summarizer import SummarizerService
 
@@ -21,25 +22,46 @@ class UpdateTranscriptionRequest(BaseModel):
 transcriber_service = None
 summarizer_service = None
 
-def get_transcriber_service():
-    global transcriber_service
-    if transcriber_service is None:
-        transcriber_service = TranscriberService()
-    return transcriber_service
+def get_transcriber_service(api_key: str):
+    """Get transcriber service with specific API key"""
+    if not api_key:
+        raise HTTPException(status_code=400, detail="OpenAI API key required")
+    return TranscriberService(api_key)
 
-def get_summarizer_service():
-    global summarizer_service
-    if summarizer_service is None:
-        summarizer_service = SummarizerService()
-    return summarizer_service
+def get_summarizer_service(api_key: str):
+    """Get summarizer service with specific API key"""
+    if not api_key:
+        raise HTTPException(status_code=400, detail="OpenAI API key required")
+    return SummarizerService(api_key)
+
+def get_user_openai_key(user: User) -> str:
+    """Get OpenAI API key for user (personal key or fallback to system key)"""
+    if user.openai_api_key:
+        return user.openai_api_key
+    
+    # Fallback to system key if user hasn't set their own
+    system_key = os.getenv("OPENAI_API_KEY")
+    if not system_key:
+        raise HTTPException(
+            status_code=400, 
+            detail="Please configure your personal OpenAI API key in your profile, or contact administrator"
+        )
+    return system_key
 
 # Supported audio formats
 SUPPORTED_FORMATS = {'.mp3', '.wav', '.m4a', '.ogg', '.webm', '.mp4', '.mpeg', '.mpga'}
-MAX_FILE_SIZE = int(os.getenv("MAX_AUDIO_SIZE_MB", "25")) * 1024 * 1024  # Convert MB to bytes
+
+# OpenAI Whisper API has a hard limit of 25MB per request
+# We'll set our limit to 30MB (approximately 30 minutes of audio at 1MB/min)
+# Files larger than 25MB will be automatically split into chunks
+MAX_FILE_SIZE = 30 * 1024 * 1024  # 30MB limit
+OPENAI_CHUNK_LIMIT = 25 * 1024 * 1024  # 25MB - OpenAI's hard limit
+RECOMMENDED_MAX_MINUTES = 30  # Recommended maximum duration
 
 @router.post("/upload")
 async def upload_audio(
     file: UploadFile = File(...),
+    current_user: User = Depends(get_current_active_user),
     db: Session = Depends(get_db)
 ):
     """
@@ -69,12 +91,16 @@ async def upload_audio(
         # Reset file pointer
         await file.seek(0)
         
+        # Get user's OpenAI API key
+        api_key = get_user_openai_key(current_user)
+        
         # Transcribe audio
-        transcriber = get_transcriber_service()
+        transcriber = get_transcriber_service(api_key)
         transcription_result = await transcriber.transcribe_audio(file, file.filename)
         
         # Save to database first to get created_at timestamp
         db_transcription = Transcription(
+            user_id=current_user.id,
             filename=file.filename,
             original_text=transcription_result["text"],
             summary="",  # Will be updated after generation
@@ -88,7 +114,7 @@ async def upload_audio(
         db.refresh(db_transcription)
         
         # Generate summary with meeting timestamp
-        summarizer = get_summarizer_service()
+        summarizer = get_summarizer_service(api_key)
         summary = await summarizer.generate_summary(
             transcription_result["text"],
             meeting_datetime=db_transcription.created_at
@@ -118,13 +144,16 @@ async def upload_audio(
 async def get_transcriptions(
     skip: int = 0,
     limit: int = 100,
+    current_user: User = Depends(get_current_active_user),
     db: Session = Depends(get_db)
 ):
     """
-    Get list of all transcriptions
+    Get list of transcriptions for current user
     """
     try:
-        transcriptions = db.query(Transcription).offset(skip).limit(limit).all()
+        transcriptions = db.query(Transcription).filter(
+            Transcription.user_id == current_user.id
+        ).offset(skip).limit(limit).all()
         
         return {
             "transcriptions": [
@@ -151,13 +180,17 @@ async def get_transcriptions(
 @router.get("/transcriptions/{transcription_id}")
 async def get_transcription(
     transcription_id: int,
+    current_user: User = Depends(get_current_active_user),
     db: Session = Depends(get_db)
 ):
     """
-    Get specific transcription by ID
+    Get specific transcription by ID (only if owned by current user)
     """
     try:
-        transcription = db.query(Transcription).filter(Transcription.id == transcription_id).first()
+        transcription = db.query(Transcription).filter(
+            Transcription.id == transcription_id,
+            Transcription.user_id == current_user.id
+        ).first()
         
         if not transcription:
             raise HTTPException(status_code=404, detail="Transcrição não encontrada")
@@ -185,13 +218,17 @@ async def get_transcription(
 async def update_transcription(
     transcription_id: int,
     update_data: UpdateTranscriptionRequest,
+    current_user: User = Depends(get_current_active_user),
     db: Session = Depends(get_db)
 ):
     """
-    Update transcription filename and/or tags
+    Update transcription filename and/or tags (only if owned by current user)
     """
     try:
-        transcription = db.query(Transcription).filter(Transcription.id == transcription_id).first()
+        transcription = db.query(Transcription).filter(
+            Transcription.id == transcription_id,
+            Transcription.user_id == current_user.id
+        ).first()
         
         if not transcription:
             raise HTTPException(status_code=404, detail="Transcrição não encontrada")
@@ -227,13 +264,17 @@ async def update_transcription(
 @router.delete("/transcriptions/{transcription_id}")
 async def delete_transcription(
     transcription_id: int,
+    current_user: User = Depends(get_current_active_user),
     db: Session = Depends(get_db)
 ):
     """
-    Delete transcription by ID
+    Delete transcription by ID (only if owned by current user)
     """
     try:
-        transcription = db.query(Transcription).filter(Transcription.id == transcription_id).first()
+        transcription = db.query(Transcription).filter(
+            Transcription.id == transcription_id,
+            Transcription.user_id == current_user.id
+        ).first()
         
         if not transcription:
             raise HTTPException(status_code=404, detail="Transcrição não encontrada")
@@ -251,19 +292,26 @@ async def delete_transcription(
 @router.post("/transcriptions/{transcription_id}/regenerate-summary")
 async def regenerate_summary(
     transcription_id: int,
+    current_user: User = Depends(get_current_active_user),
     db: Session = Depends(get_db)
 ):
     """
-    Regenerate summary for existing transcription
+    Regenerate summary for existing transcription (only if owned by current user)
     """
     try:
-        transcription = db.query(Transcription).filter(Transcription.id == transcription_id).first()
+        transcription = db.query(Transcription).filter(
+            Transcription.id == transcription_id,
+            Transcription.user_id == current_user.id
+        ).first()
         
         if not transcription:
             raise HTTPException(status_code=404, detail="Transcrição não encontrada")
         
+        # Get user's OpenAI API key
+        api_key = get_user_openai_key(current_user)
+        
         # Generate new summary with original meeting timestamp
-        summarizer = get_summarizer_service()
+        summarizer = get_summarizer_service(api_key)
         new_summary = await summarizer.generate_summary(
             transcription.original_text,
             meeting_datetime=transcription.created_at
@@ -288,3 +336,57 @@ async def regenerate_summary(
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Erro ao regenerar resumo: {str(e)}")
+
+@router.get("/estimate-cost")
+async def estimate_transcription_cost(file_size_mb: float):
+    """
+    Estimate the cost of transcribing an audio file
+    
+    Args:
+        file_size_mb: Size of the audio file in MB
+    
+    Returns:
+        Estimated cost and duration based on OpenAI Whisper pricing with warnings
+    """
+    try:
+        # OpenAI Whisper pricing: $0.006 per minute
+        PRICE_PER_MINUTE = 0.006
+        
+        # Estimate duration based on file size
+        # Average bitrate for webm audio: ~128 kbps = ~0.96 MB/minute
+        # But can vary from 0.5 MB/min (low quality) to 2 MB/min (high quality)
+        # We'll use conservative estimate: 1 MB/minute
+        ESTIMATED_MB_PER_MINUTE = 1.0
+        
+        estimated_minutes = file_size_mb / ESTIMATED_MB_PER_MINUTE
+        estimated_cost = estimated_minutes * PRICE_PER_MINUTE
+        
+        # Check limits and generate warnings
+        warnings = []
+        exceeds_limit = False
+        
+        if file_size_mb > MAX_FILE_SIZE / (1024 * 1024):
+            exceeds_limit = True
+            warnings.append(f"⚠️ Arquivo excede o limite de {MAX_FILE_SIZE // (1024*1024)}MB")
+        elif file_size_mb > 25:
+            warnings.append(f"⚠️ Arquivo próximo do limite da API OpenAI (25MB). Pode falhar.")
+        elif estimated_minutes > RECOMMENDED_MAX_MINUTES:
+            warnings.append(f"⚠️ Duração estimada ({round(estimated_minutes, 1)}min) excede o recomendado ({RECOMMENDED_MAX_MINUTES}min)")
+        elif estimated_minutes > 25:
+            warnings.append(f"ℹ️ Arquivo grande ({round(estimated_minutes, 1)}min). Transcrição pode demorar.")
+        
+        return {
+            "file_size_mb": file_size_mb,
+            "estimated_duration_minutes": round(estimated_minutes, 1),
+            "estimated_cost_usd": round(estimated_cost, 4),
+            "estimated_cost_brl": round(estimated_cost * 5.0, 2),  # Approximate BRL conversion
+            "price_per_minute_usd": PRICE_PER_MINUTE,
+            "max_allowed_minutes": RECOMMENDED_MAX_MINUTES,
+            "max_allowed_mb": MAX_FILE_SIZE // (1024 * 1024),
+            "exceeds_limit": exceeds_limit,
+            "warnings": warnings,
+            "note": "Estimativa baseada em taxa média de 1 MB/minuto. O custo real pode variar."
+        }
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Erro ao calcular estimativa: {str(e)}")

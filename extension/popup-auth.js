@@ -54,9 +54,6 @@ async function init() {
         try {
             await loadUserProfile();
             showMainScreen();
-            
-            // Check if there's an active recording in background
-            await checkRecordingState();
         } catch (error) {
             console.error('Error loading user profile:', error);
             showAuthScreen();
@@ -271,7 +268,7 @@ async function startRecording() {
         
         // Send message to background script to start recording
         const response = await chrome.runtime.sendMessage({
-            action: 'startBackgroundRecording',
+            action: 'startRecording',
             tabId: tab.id
         });
 
@@ -285,12 +282,13 @@ async function startRecording() {
             recordIcon.textContent = '⏹';
             recordText.textContent = 'Parar Gravação';
             
+            timer.classList.add('active');
             recordingIndicator.classList.add('active');
             
             // Start timer
             startTimer();
             
-            showMessage('Gravação iniciada em segundo plano! Você pode fechar este popup.', 'success');
+            showMessage('Gravação iniciada! Você pode fechar este popup.', 'success');
         } else {
             throw new Error(response.error || 'Erro ao iniciar gravação');
         }
@@ -304,10 +302,10 @@ async function stopRecording() {
     try {
         // Send message to background script to stop recording
         const response = await chrome.runtime.sendMessage({
-            action: 'stopBackgroundRecording'
+            action: 'stopRecording'
         });
 
-        if (response.success) {
+        if (response.success && response.audioData) {
             isRecording = false;
             
             // Stop timer
@@ -321,25 +319,17 @@ async function stopRecording() {
             
             recordingIndicator.classList.remove('active');
             
-            // Get recording from storage
-            const result = await chrome.storage.local.get(['lastRecording']);
+            // Create blob from audio data
+            const uint8Array = new Uint8Array(response.audioData);
+            recordedBlob = new Blob([uint8Array], { type: 'audio/webm' });
             
-            if (result.lastRecording && result.lastRecording.audio) {
-                // Convert base64 to blob
-                const audioData = result.lastRecording.audio;
-                const response = await fetch(audioData);
-                recordedBlob = await response.blob();
-                
-                // Show audio preview
-                const audioUrl = URL.createObjectURL(recordedBlob);
-                audioPlayer.src = audioUrl;
-                audioPreview.classList.add('active');
-                actions.classList.add('active');
-                
-                showMessage(`Gravação concluída! (${formatBytes(result.lastRecording.size)}) Clique em "Transcrever".`, 'success');
-            } else {
-                showMessage('Gravação parada, mas nenhum áudio foi capturado.', 'warning');
-            }
+            // Show audio preview
+            const audioUrl = URL.createObjectURL(recordedBlob);
+            audioPlayer.src = audioUrl;
+            audioPreview.classList.add('active');
+            actions.classList.add('active');
+            
+            showMessage('Gravação concluída! Clique em "Transcrever" para enviar.', 'success');
         } else {
             throw new Error(response.error || 'Erro ao parar gravação');
         }
@@ -349,14 +339,6 @@ async function stopRecording() {
     }
 }
 
-function formatBytes(bytes) {
-    if (bytes === 0) return '0 Bytes';
-    const k = 1024;
-    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
-    const i = Math.floor(Math.log(bytes) / Math.log(k));
-    return Math.round((bytes / Math.pow(k, i)) * 100) / 100 + ' ' + sizes[i];
-}
-
 function startTimer() {
     timerInterval = setInterval(() => {
         const elapsed = Math.floor((Date.now() - recordingStartTime) / 1000);
@@ -364,35 +346,6 @@ function startTimer() {
         const seconds = elapsed % 60;
         timer.textContent = `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
     }, 1000);
-}
-
-async function checkRecordingState() {
-    try {
-        // Query background script for recording state
-        const response = await chrome.runtime.sendMessage({
-            action: 'getRecordingState'
-        });
-
-        if (response.success && response.isRecording) {
-            // Recording is active in background
-            isRecording = true;
-            recordingStartTime = response.startTime;
-            
-            // Update UI to show recording state
-            recordBtn.classList.remove('start');
-            recordBtn.classList.add('stop');
-            recordIcon.textContent = '⏹';
-            recordText.textContent = 'Parar Gravação';
-            recordingIndicator.classList.add('active');
-            
-            // Start timer from the beginning
-            startTimer();
-            
-            showMessage('Gravação em andamento (iniciada em segundo plano)', 'info');
-        }
-    } catch (error) {
-        console.error('Error checking recording state:', error);
-    }
 }
 
 async function uploadAudio() {

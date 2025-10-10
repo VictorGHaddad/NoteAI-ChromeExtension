@@ -5,6 +5,47 @@ Todas as mudanças notáveis neste projeto serão documentadas neste arquivo.
 O formato é baseado em [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/),
 e este projeto adere ao [Semantic Versioning](https://semver.org/lang/pt-BR/).
 
+## [1.0.5] - 2025-10-08
+
+### ✨ Adicionado
+- **Estimativa de Custo**: Endpoint `/api/audio/estimate-cost` para calcular custo de transcrição
+  - Baseado em pricing OpenAI Whisper ($0.006/minuto)
+  - Retorna estimativa em USD e BRL
+  - Estimativa de duração baseada em tamanho do arquivo
+- **Upload Externo no Dashboard**: Permite carregar áudios gravados fora da extensão Chrome
+  - Interface drag & drop para arquivos de áudio
+  - Barra de progresso durante upload e transcrição
+  - Suporte a múltiplos formatos de áudio
+  - Botão "Upload Áudio" na barra de ferramentas
+- **Sistema de Avisos para Arquivos Grandes**:
+  - Limite de 30MB (~30 minutos) baseado em restrições da API OpenAI Whisper
+  - Avisos automáticos quando arquivo se aproxima do limite (>25MB)
+  - Bloqueio de transcrição para arquivos que excedem 30MB
+  - Mensagens claras sobre limites e duração máxima
+
+### 🔧 Alterado
+- **Limites de Áudio Ajustados**: Reduzido de 200MB para 30MB
+  - OpenAI Whisper API tem limite rígido de 25MB por requisição
+  - Sistema agora respeita limites da API com avisos preventivos
+- **Timeout Aumentado**: Backend configurado com `--timeout-keep-alive 300`
+  - Suporta uploads e transcrições de arquivos próximos ao limite
+  - Restart policy `unless-stopped` para maior estabilidade
+- `.env.example`: Documentação atualizada com limites corretos e recomendações
+- Extension: Integração com endpoint de estimativa de custo com avisos visuais
+- Dashboard: Validação de tamanho antes do upload com mensagens de erro claras
+
+### 🐛 Corrigido
+- **Erro 500 em uploads > 3MB**: Timeout do uvicorn aumentado para 300 segundos
+- **Backend parando inesperadamente**: Adicionado restart policy no docker-compose
+- **Limite hardcoded incorreto**: Removido limite de 20GB, ajustado para 30MB realista
+
+### 📝 Documentação
+- Exemplos de estimativas de custo no `.env.example`
+- Avisos claros sobre limites da API OpenAI Whisper (25MB)
+- Recomendação: gravações de até 30 minutos (~30MB)
+
+---
+
 ## [1.0.4] - 2025-10-07
 
 ### ✨ Adicionado

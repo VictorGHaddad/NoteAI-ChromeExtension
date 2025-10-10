@@ -1,6 +1,6 @@
 # 🎙️ NoteAI - Chrome Extension
 
-[![Version](https://img.shields.io/badge/version-1.0.4-blue.svg)](https://github.com/VictorGHaddad/NoteAI-ChromeExtension/releases/tag/v1.0.4)
+[![Version](https://img.shields.io/badge/version-1.0.5-blue.svg)](https://github.com/VictorGHaddad/NoteAI-ChromeExtension/releases/tag/v1.0.5)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 
 Um monorepo completo para transcrição de áudio usando IA, com extensão Chrome, backend FastAPI e dashboard React.
@@ -15,13 +15,17 @@ Um monorepo completo para transcrição de áudio usando IA, com extensão Chrom
 - 🐳 **Docker**: Ambiente completo containerizado
 - 🗄️ **PostgreSQL**: Armazenamento persistente de dados
 
-### Extension Features (v1.0.4)
-- 💾 **Exportação de Áudio**: Baixe o arquivo de áudio original (.webm) antes de transcrever
+### Extension Features (v1.0.5)
+- � **Estimativa de Custo**: Veja o custo estimado antes de transcrever (USD e BRL)
+- ⚠️ **Sistema de Avisos**: Alertas automáticos para arquivos próximos ao limite
+- �💾 **Exportação de Áudio**: Baixe o arquivo de áudio original (.webm) antes de transcrever
 - 🎙️ **Gravação em Background**: Continue navegando enquanto grava
-- 📏 **Suporte a Reuniões Longas**: Até 2 horas de gravação (200MB)
+- 📏 **Limite Inteligente**: Até 30 minutos de gravação (~30MB) com validação automática
 - 🔄 **Auto-save**: Gravações salvas automaticamente no storage do Chrome
 
-### Dashboard Features (v1.0.0)
+### Dashboard Features (v1.0.5)
+- 📤 **Upload Externo**: Faça upload de áudios gravados fora da extensão (drag & drop)
+- 📊 **Validação de Tamanho**: Sistema verifica limites antes do upload
 - 📤 **Exportação**: Exporte transcrições em PDF, TXT ou Markdown
 - ✏️ **Edição de Títulos**: Edite o nome das gravações diretamente no modal
 - 📋 **Copiar Resumo**: Copie o texto do resumo com um clique
@@ -140,18 +144,81 @@ docker run --name audio-transcriber-db \
 
 ## 📱 Uso da Extensão Chrome
 
+### ⚠️ **IMPORTANTE: Limites de Gravação**
+
+A API OpenAI Whisper tem um **limite rígido de 25MB por requisição**. Por isso:
+
+- ✅ **Limite recomendado**: Até **30 minutos** (~30MB)
+- ⚠️ **Arquivos entre 25-30MB**: Podem demorar mais para processar
+- ❌ **Arquivos acima de 30MB**: Serão rejeitados automaticamente
+
+**Estimativa de tamanho por duração:**
+- 5 minutos ≈ 5MB ✅
+- 15 minutos ≈ 15MB ✅
+- 30 minutos ≈ 30MB ✅ (limite máximo)
+- 45 minutos ≈ 45MB ❌ (muito grande!)
+
+> 💡 **Dica**: O sistema mostra automaticamente o custo estimado e avisos quando você gravar um áudio. Se o arquivo for muito grande, o botão de transcrever será desabilitado.
+
+### Como Usar
+
 1. **Clique no ícone da extensão** na barra de ferramentas
 2. **Clique em "Iniciar Gravação"** e permita o acesso ao microfone
 3. **Fale claramente** - o timer mostrará a duração
-4. **Clique em "Parar Gravação"** quando terminar
-5. **Ouça a prévia** do áudio gravado
-6. **Clique em "Transcrever"** para enviar para o servidor
-7. **Visualize o resultado** com texto e resumo
+4. **Observe o timer** - mantenha abaixo de 30 minutos
+5. **Clique em "Parar Gravação"** quando terminar
+6. **Veja a estimativa de custo** - será exibida automaticamente por 15 segundos
+7. **Ouça a prévia** do áudio gravado (opcional)
+8. **Opções disponíveis:**
+   - 💾 **Exportar**: Baixe o arquivo .webm original
+   - 🚀 **Transcrever**: Envie para transcrição com IA
+   - 🗑️ **Limpar**: Apague a gravação atual
+9. **Visualize o resultado** no dashboard com texto e resumo estruturado
+
+### 💰 Estimativa de Custo
+
+O sistema calcula automaticamente:
+- **Duração estimada** baseada no tamanho do arquivo
+- **Custo em USD e BRL** (taxa: $0.006/minuto)
+- **Avisos** se o arquivo estiver próximo ou acima do limite
+
+**Exemplos de custo:**
+- 10 minutos: ~$0.06 USD (R$ 0.30)
+- 20 minutos: ~$0.12 USD (R$ 0.60)
+- 30 minutos: ~$0.18 USD (R$ 0.90)
+
+## 📊 Uso do Dashboard
+
+### Upload de Áudio Externo
+
+O dashboard permite fazer upload de arquivos de áudio gravados fora da extensão Chrome:
+
+1. **Acesse o dashboard** em http://localhost:3000
+2. **Clique em "Upload Áudio"** no canto superior direito
+3. **Selecione ou arraste um arquivo** (formatos: .mp3, .wav, .m4a, .ogg, .webm, .mp4)
+4. **Aguarde o upload e transcrição** - uma barra de progresso será exibida
+5. **Veja o resultado** automaticamente na lista de transcrições
+
+**⚠️ Limites para upload externo:**
+- Tamanho máximo: **30MB** (~30 minutos)
+- Formatos suportados: MP3, WAV, M4A, OGG, WebM, MP4, MPEG, MPGA
+- O sistema valida o tamanho antes do upload e mostra avisos
+
+### Gerenciamento de Transcrições
+
+- **Visualizar**: Clique em qualquer card para ver detalhes completos
+- **Editar título**: Clique no ícone de editar no modal
+- **Adicionar tags**: Use o botão "+ Tag" para organizar
+- **Copiar resumo**: Botão "Copiar" na seção de resumo
+- **Exportar**: Escolha entre PDF, TXT ou Markdown
+- **Deletar**: Botão de lixeira para remover transcrições
+- **Regenerar resumo**: Gere um novo resumo da transcrição
 
 ## 🌐 API Endpoints
 
 ### Audio
 - `POST /api/audio/upload` - Upload e transcrição de áudio
+- `GET /api/audio/estimate-cost?file_size_mb=X` - **[NOVO v1.0.5]** Estimar custo de transcrição
 - `GET /api/audio/transcriptions` - Listar todas as transcrições
 - `GET /api/audio/transcriptions/{id}` - Obter transcrição específica
 - `PATCH /api/audio/transcriptions/{id}` - Atualizar título e tags da transcrição

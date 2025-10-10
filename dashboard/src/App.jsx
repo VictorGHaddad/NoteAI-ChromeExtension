@@ -46,6 +46,7 @@ import {
   Check,
   Add,
   LocalOffer,
+  CloudUpload,
 } from '@mui/icons-material'
 import axios from 'axios'
 import { jsPDF } from 'jspdf'
@@ -53,6 +54,22 @@ import { saveAs } from 'file-saver'
 
 // API Base URL - usa variável de ambiente ou fallback para localhost
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api'
+
+// Axios instance with auth interceptor
+const api = axios.create({
+  baseURL: API_BASE_URL
+})
+
+// Add token to all requests
+api.interceptors.request.use((config) => {
+  const token = localStorage.getItem('authToken')
+  if (token) {
+    config.headers.Authorization = `Bearer ${token}`
+  }
+  return config
+}, (error) => {
+  return Promise.reject(error)
+})
 
 function App() {
   const [transcriptions, setTranscriptions] = useState([])
@@ -64,6 +81,13 @@ function App() {
   const [fontSize, setFontSize] = useState(() => localStorage.getItem('fontSize') || 'medium')
   const [exportMenuAnchor, setExportMenuAnchor] = useState(null)
   
+  // Auth states
+  const [isAuthenticated, setIsAuthenticated] = useState(false)
+  const [loginEmail, setLoginEmail] = useState('')
+  const [loginPassword, setLoginPassword] = useState('')
+  const [loginError, setLoginError] = useState('')
+  const [loggingIn, setLoggingIn] = useState(false)
+  
   // New states for editing
   const [isEditingTitle, setIsEditingTitle] = useState(false)
   const [editedTitle, setEditedTitle] = useState('')
@@ -71,16 +95,55 @@ function App() {
   const [snackbarMessage, setSnackbarMessage] = useState('')
   const [newTag, setNewTag] = useState('')
   const [isAddingTag, setIsAddingTag] = useState(false)
+  
+  // Upload dialog state
+  const [uploadDialogOpen, setUploadDialogOpen] = useState(false)
+  const [uploadFile, setUploadFile] = useState(null)
+  const [uploading, setUploading] = useState(false)
+  const [uploadProgress, setUploadProgress] = useState(0)
 
   useEffect(() => {
-    fetchTranscriptions()
+    const token = localStorage.getItem('authToken')
+    if (token) {
+      setIsAuthenticated(true)
+      fetchTranscriptions()
+    } else {
+      setLoading(false)
+    }
   }, [])
+
+  const handleLogin = async (e) => {
+    e.preventDefault()
+    setLoggingIn(true)
+    setLoginError('')
+
+    try {
+      const response = await axios.post(`${API_BASE_URL}/auth/login`, {
+        email: loginEmail,
+        password: loginPassword
+      })
+
+      localStorage.setItem('authToken', response.data.access_token)
+      setIsAuthenticated(true)
+      fetchTranscriptions()
+    } catch (err) {
+      setLoginError(err.response?.data?.detail || 'Erro ao fazer login')
+    } finally {
+      setLoggingIn(false)
+    }
+  }
+
+  const handleLogout = () => {
+    localStorage.removeItem('authToken')
+    setIsAuthenticated(false)
+    setTranscriptions([])
+  }
 
   const fetchTranscriptions = async () => {
     try {
       setLoading(true)
       setError('')
-      const response = await axios.get(`${API_BASE_URL}/audio/transcriptions`)
+      const response = await api.get(`audio/transcriptions`)
       setTranscriptions(response.data.transcriptions || [])
     } catch (err) {
       setError(`Erro ao carregar transcrições: ${err.message}`)
@@ -90,9 +153,66 @@ function App() {
     }
   }
 
+  const uploadAudioFile = async () => {
+    if (!uploadFile) {
+      setSnackbarMessage('Selecione um arquivo de áudio')
+      setSnackbarOpen(true)
+      return
+    }
+
+    try {
+      // Check file size limit (30MB)
+      const fileSizeMB = uploadFile.size / (1024 * 1024)
+      const MAX_SIZE_MB = 30
+      
+      if (fileSizeMB > MAX_SIZE_MB) {
+        setError(`Arquivo muito grande (${fileSizeMB.toFixed(2)}MB). Máximo permitido: ${MAX_SIZE_MB}MB (~30 minutos)`)
+        return
+      }
+      
+      // Show warning for large files
+      if (fileSizeMB > 25) {
+        setSnackbarMessage(`⚠️ Arquivo grande (${fileSizeMB.toFixed(2)}MB). A transcrição pode demorar...`)
+        setSnackbarOpen(true)
+      }
+      
+      setUploading(true)
+      setUploadProgress(0)
+
+      const formData = new FormData()
+      formData.append('file', uploadFile)
+
+      const response = await api.post(`audio/upload`, formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data'
+        },
+        onUploadProgress: (progressEvent) => {
+          const percentCompleted = Math.round((progressEvent.loaded * 100) / progressEvent.total)
+          setUploadProgress(percentCompleted)
+        }
+      })
+
+      // Add new transcription to the list
+      setTranscriptions(prev => [response.data, ...prev])
+      
+      // Close dialog and reset
+      setUploadDialogOpen(false)
+      setUploadFile(null)
+      setSnackbarMessage('Áudio transcrito com sucesso!')
+      setSnackbarOpen(true)
+      
+    } catch (err) {
+      setError(`Erro ao fazer upload: ${err.response?.data?.detail || err.message}`)
+      console.error('Upload error:', err)
+    } finally {
+      setUploading(false)
+      setUploadProgress(0)
+    }
+  }
+
   const deleteTranscription = async (id) => {
     try {
-      await axios.delete(`${API_BASE_URL}/audio/transcriptions/${id}`)
+      await api.delete(`audio/transcriptions/${id}`)
       setTranscriptions(prev => prev.filter(t => t.id !== id))
       if (selectedTranscription && selectedTranscription.id === id) {
         setDialogOpen(false)
@@ -105,7 +225,7 @@ function App() {
 
   const regenerateSummary = async (id) => {
     try {
-      const response = await axios.post(`${API_BASE_URL}/audio/transcriptions/${id}/regenerate-summary`)
+      const response = await api.post(`audio/transcriptions/${id}/regenerate-summary`)
       setTranscriptions(prev => 
         prev.map(t => t.id === id ? response.data : t)
       )
@@ -131,8 +251,8 @@ function App() {
     }
 
     try {
-      const response = await axios.patch(
-        `${API_BASE_URL}/audio/transcriptions/${selectedTranscription.id}`,
+      const response = await api.patch(
+        `audio/transcriptions/${selectedTranscription.id}`,
         { filename: editedTitle }
       )
       
@@ -182,8 +302,8 @@ function App() {
     const updatedTags = [...currentTags, newTag.trim()]
 
     try {
-      const response = await axios.patch(
-        `${API_BASE_URL}/audio/transcriptions/${selectedTranscription.id}`,
+      const response = await api.patch(
+        `audio/transcriptions/${selectedTranscription.id}`,
         { tags: updatedTags }
       )
       
@@ -205,8 +325,8 @@ function App() {
     const updatedTags = (selectedTranscription.tags || []).filter(tag => tag !== tagToRemove)
 
     try {
-      const response = await axios.patch(
-        `${API_BASE_URL}/audio/transcriptions/${selectedTranscription.id}`,
+      const response = await api.patch(
+        `audio/transcriptions/${selectedTranscription.id}`,
         { tags: updatedTags }
       )
       
@@ -466,6 +586,74 @@ ${transcription.language ? `- **Idioma:** ${transcription.language}` : ''}
 
   const stats = getTotalStats()
 
+  // Login screen
+  if (!isAuthenticated) {
+    return (
+      <Box sx={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', bgcolor: '#fafafa' }}>
+        <Paper elevation={0} sx={{ p: 4, maxWidth: 400, width: '100%', border: '1px solid #e5e5e5', borderRadius: '12px' }}>
+          <Box sx={{ textAlign: 'center', mb: 3 }}>
+            <Box sx={{ mb: 2, display: 'flex', justifyContent: 'center' }}>
+              <img 
+                src="/ccm-logo.png" 
+                alt="CCM Tecnologia" 
+                style={{ height: '60px', width: 'auto' }}
+              />
+            </Box>
+            <Typography variant="h5" sx={{ fontWeight: 600, color: 'black', mb: 1 }}>
+              Meeting AI by P&D
+            </Typography>
+            <Typography variant="body2" sx={{ color: '#666' }}>
+              Faça login para continuar
+            </Typography>
+          </Box>
+
+          {loginError && (
+            <Alert severity="error" sx={{ mb: 2 }}>
+              {loginError}
+            </Alert>
+          )}
+
+          <form onSubmit={handleLogin}>
+            <TextField
+              fullWidth
+              label="Email"
+              type="email"
+              value={loginEmail}
+              onChange={(e) => setLoginEmail(e.target.value)}
+              disabled={loggingIn}
+              sx={{ mb: 2 }}
+              required
+            />
+            <TextField
+              fullWidth
+              label="Senha"
+              type="password"
+              value={loginPassword}
+              onChange={(e) => setLoginPassword(e.target.value)}
+              disabled={loggingIn}
+              sx={{ mb: 3 }}
+              required
+            />
+            <Button
+              type="submit"
+              fullWidth
+              variant="contained"
+              disabled={loggingIn}
+              sx={{
+                bgcolor: 'black',
+                py: 1.5,
+                textTransform: 'none',
+                '&:hover': { bgcolor: '#333' }
+              }}
+            >
+              {loggingIn ? 'Entrando...' : 'Entrar'}
+            </Button>
+          </form>
+        </Paper>
+      </Box>
+    )
+  }
+
   return (
     <Box sx={{ 
       minHeight: '100vh', 
@@ -483,18 +671,11 @@ ${transcription.language ? `- **Idioma:** ${transcription.language}` : ''}
       >
         <Toolbar sx={{ py: 1 }}>
           <Box sx={{ display: 'flex', alignItems: 'center', flexGrow: 1 }}>
-            <Box sx={{ 
-              width: 32, 
-              height: 32, 
-              borderRadius: '6px',
-              bgcolor: 'black',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              mr: 2,
-            }}>
-              <Mic sx={{ color: 'white', fontSize: 18 }} />
-            </Box>
+            <img 
+              src="/ccm-logo.png" 
+              alt="CCM Tecnologia" 
+              style={{ height: '32px', width: 'auto', marginRight: '16px' }}
+            />
             <Typography 
               variant="h6" 
               component="div" 
@@ -504,9 +685,33 @@ ${transcription.language ? `- **Idioma:** ${transcription.language}` : ''}
                 fontSize: '1.1rem',
               }}
             >
-              Audio Transcriber
+              Meeting AI by P&D
             </Typography>
           </Box>
+          <Button
+            startIcon={<CloudUpload />}
+            onClick={() => setUploadDialogOpen(true)}
+            sx={{
+              mr: 2,
+              color: 'black',
+              textTransform: 'none',
+              fontWeight: 500,
+              '&:hover': { bgcolor: '#f5f5f5' }
+            }}
+          >
+            Upload Áudio
+          </Button>
+          <Button
+            onClick={handleLogout}
+            sx={{
+              mr: 2,
+              color: '#666',
+              textTransform: 'none',
+              '&:hover': { bgcolor: '#f5f5f5', color: '#000' }
+            }}
+          >
+            Sair
+          </Button>
           <IconButton 
             onClick={fetchTranscriptions}
             sx={{ 
@@ -1162,6 +1367,109 @@ ${transcription.language ? `- **Idioma:** ${transcription.language}` : ''}
             </DialogActions>
           </>
         ) : null}
+      </Dialog>
+
+      {/* Upload Dialog */}
+      <Dialog
+        open={uploadDialogOpen}
+        onClose={() => !uploading && setUploadDialogOpen(false)}
+        maxWidth="sm"
+        fullWidth
+        PaperProps={{
+          sx: {
+            borderRadius: '12px',
+            border: '1px solid #e5e5e5'
+          }
+        }}
+      >
+        <DialogTitle sx={{ 
+          borderBottom: '1px solid #e5e5e5',
+          py: 2,
+          px: 3,
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center'
+        }}>
+          <Typography variant="h6" sx={{ fontWeight: 600, color: '#000' }}>
+            Upload de Áudio
+          </Typography>
+          <IconButton 
+            onClick={() => !uploading && setUploadDialogOpen(false)}
+            disabled={uploading}
+            size="small"
+          >
+            <Close />
+          </IconButton>
+        </DialogTitle>
+        
+        <DialogContent sx={{ py: 3 }}>
+          <Box sx={{ textAlign: 'center' }}>
+            <Box
+              sx={{
+                border: '2px dashed #e5e5e5',
+                borderRadius: '12px',
+                p: 4,
+                mb: 2,
+                bgcolor: '#fafafa',
+                cursor: 'pointer',
+                '&:hover': {
+                  bgcolor: '#f5f5f5',
+                  borderColor: '#d4d4d4'
+                },
+                transition: 'all 0.2s'
+              }}
+              onClick={() => !uploading && document.getElementById('audio-file-input').click()}
+            >
+              <CloudUpload sx={{ fontSize: 48, color: '#666', mb: 2 }} />
+              <Typography variant="body1" sx={{ color: '#333', mb: 1 }}>
+                {uploadFile ? uploadFile.name : 'Clique para selecionar um arquivo de áudio'}
+              </Typography>
+              <Typography variant="body2" sx={{ color: '#666' }}>
+                Formatos suportados: MP3, WAV, M4A, OGG, WEBM
+              </Typography>
+              <input
+                id="audio-file-input"
+                type="file"
+                accept="audio/*,.mp3,.wav,.m4a,.ogg,.webm"
+                style={{ display: 'none' }}
+                onChange={(e) => setUploadFile(e.target.files[0])}
+                disabled={uploading}
+              />
+            </Box>
+            
+            {uploading && (
+              <Box sx={{ mt: 2 }}>
+                <CircularProgress variant="determinate" value={uploadProgress} />
+                <Typography variant="body2" sx={{ mt: 1, color: '#666' }}>
+                  Enviando e transcrevendo... {uploadProgress}%
+                </Typography>
+              </Box>
+            )}
+          </Box>
+        </DialogContent>
+        
+        <DialogActions sx={{ px: 3, pb: 3 }}>
+          <Button
+            onClick={() => setUploadDialogOpen(false)}
+            disabled={uploading}
+            sx={{ textTransform: 'none', color: '#666' }}
+          >
+            Cancelar
+          </Button>
+          <Button
+            onClick={uploadAudioFile}
+            disabled={!uploadFile || uploading}
+            variant="contained"
+            sx={{
+              bgcolor: '#000',
+              textTransform: 'none',
+              '&:hover': { bgcolor: '#333' },
+              '&:disabled': { bgcolor: '#e5e5e5' }
+            }}
+          >
+            {uploading ? 'Enviando...' : 'Transcrever'}
+          </Button>
+        </DialogActions>
       </Dialog>
 
       {/* Snackbar for notifications */}
